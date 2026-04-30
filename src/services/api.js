@@ -114,6 +114,43 @@ export const adminDashboardAPI = {
   getStats: () => request('/api/admin/dashboard'),
 };
 
+// ─── Admin Analytics APIs ─────────────────────────────────────────────────────
+export const adminAnalyticsAPI = {
+  getOverview: () => request('/api/admin/subscriptions/analytics/overview'),
+  getBySchool: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/by-school${q ? `?${q}` : ''}`);
+  },
+  getChildrenBySchool: (schoolId, params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/school/${schoolId}/children${q ? `?${q}` : ''}`);
+  },
+  getTeacherSubscriptions: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/teachers${q ? `?${q}` : ''}`);
+  },
+  getProfessionalSubscriptions: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/professionals${q ? `?${q}` : ''}`);
+  },
+  getExpiringSoon: (days = 7, entityType = '') => {
+    const q = new URLSearchParams({ days, entityType }).toString();
+    return request(`/api/admin/subscriptions/analytics/expiring-soon?${q}`);
+  },
+  getAllMembersStatus: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/all-members${q ? `?${q}` : ''}`);
+  },
+  getActiveMealStatus: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/active-meal-status${q ? `?${q}` : ''}`);
+  },
+  getNotSubscribed: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/not-subscribed${q ? `?${q}` : ''}`);
+  },
+};
+
 // ─── Admin Schools APIs ───────────────────────────────────────────────────────
 // Fields: name*, address*, city*, state*, pincode*, country
 // Response GET list: { data: { schools: [], pagination: { currentPage, totalPages, totalItems, itemsPerPage } } }
@@ -135,9 +172,13 @@ export const adminSchoolsAPI = {
 // Response POST/PUT: { data: {} } (flat row)
 // Response DELETE: { data: { id } }
 export const adminSubscriptionsAPI = {
+  getAll: () => request('/api/admin/subscriptions'),
+  getById: (id) => request(`/api/admin/subscriptions/${id}`),
   create: (data) => request('/api/admin/subscriptions', { method: 'POST', body: data }),
   update: (id, data) => request(`/api/admin/subscriptions/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/api/admin/subscriptions/${id}`, { method: 'DELETE' }),
+  cancelClientSubscription: (subscriptionId) =>
+    request(`/api/admin/subscriptions/client-subscription/${subscriptionId}`, { method: 'DELETE' }),
 };
 
 export const adminTrialPlansAPI = {
@@ -163,12 +204,30 @@ export const adminMenuAPI = {
     request(`/api/admin/menu/${date}`, { method: 'DELETE' }),
 };
 
+// ─── Admin Meals APIs ────────────────────────────────────────────────────────
+export const adminMealsAPI = {
+  reduceToday: () => request('/api/admin/meals/reduce-today', { method: 'POST' }),
+  getReductionHistory: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/meals/reduction-history${q ? `?${q}` : ''}`);
+  },
+  getDailyLog: (date = 'today') => request(`/api/admin/meals/daily-log/${date}`),
+  getKitchenReport: () => request('/api/admin/meals/kitchen-report/today'),
+  getTokensAll: () => `${BASE_URL}/api/admin/meals/tokens/all?token=${TokenService.getAccessToken()}`,
+};
+
 // ─── Admin Corporate Locations APIs ──────────────────────────────────────────
 // Required: name*, address*, city*, state*   Optional: is_active
 // Response: { data: {} } (flat row)
 export const adminCorporateAPI = {
   create: (data) =>
     request('/api/admin/corporate-locations', { method: 'POST', body: data }),
+  update: (id, data) =>
+    request(`/api/admin/corporate-locations/${id}`, { method: 'PUT', body: data }),
+  delete: (id) =>
+    request(`/api/admin/corporate-locations/${id}`, { method: 'DELETE' }),
+  setStatus: (id, isActive) =>
+    request(`/api/admin/corporate-locations/${id}/status`, { method: 'PATCH', body: { is_active: isActive } }),
 };
 
 export const adminPaymentAPI = {
@@ -177,6 +236,18 @@ export const adminPaymentAPI = {
     return request(`/api/admin/payment/all${q ? `?${q}` : ''}`);
   },
   getStats: () => request('/api/admin/payment/stats'),
+};
+
+// ─── Admin Homepage APIs ─────────────────────────────────────────────────────
+// POST /api/admin/homepage            Body: { name, description, display_order }
+// PUT  /api/admin/homepage/:id        Body: { name?, description?, display_order?, is_active? }
+// DELETE /api/admin/homepage/:id
+// GET  /api/common/homepage           (public read — no auth needed)
+export const adminHomepageAPI = {
+  getAll: () => request('/api/common/homepage'),
+  create: (data) => request('/api/admin/homepage', { method: 'POST', body: data }),
+  update: (id, data) => request(`/api/admin/homepage/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => request(`/api/admin/homepage/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Admin Lookup APIs ────────────────────────────────────────────────────────

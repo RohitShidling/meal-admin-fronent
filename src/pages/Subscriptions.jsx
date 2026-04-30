@@ -31,8 +31,8 @@ export default function Subscriptions() {
   const fetchSubscriptions = useCallback(async () => {
     setLoading(true);
     try {
-      // Response: { success, count, data: [] }  — flat array of rows
-      const res = await commonAPI.getSubscriptions();
+      // Uses admin endpoint so ALL plans (incl. inactive) are returned
+      const res = await adminSubscriptionsAPI.getAll();
       setSubscriptions(Array.isArray(res?.data) ? res.data : []);
     } catch (err) {
       toast.error(err.message || 'Failed to load subscriptions');

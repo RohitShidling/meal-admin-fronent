@@ -1,41 +1,99 @@
+/* ── Full page layout ── */
 .login-page {
   min-height: 100vh;
   display: flex;
+  background: var(--bg-primary);
+}
+
+/* ── Left branding panel ── */
+.login-panel-left {
+  width: 420px;
+  min-width: 420px;
+  background: #111111;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 48px 44px;
+}
+
+.login-brand-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 48px;
+}
+
+.login-brand-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  margin-bottom: 12px;
+}
+
+.login-brand-name {
+  font-size: 36px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.06em;
+  margin: 0;
+  line-height: 1;
+}
+
+.login-brand-tagline {
+  font-size: 14px;
+  color: rgba(255,255,255,0.45);
+  margin: 0;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.login-features {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+  justify-content: center;
+}
+
+.login-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: rgba(255,255,255,0.75);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.login-feature-icon {
+  width: 36px;
+  height: 36px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.login-panel-footer {
+  font-size: 12px;
+  color: rgba(255,255,255,0.25);
+  margin: 0;
+  margin-top: 48px;
+}
+
+/* ── Right form panel ── */
+.login-panel-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
   background: var(--bg-primary);
-  position: relative;
-  overflow: hidden;
-}
-
-.login-bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.login-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.15;
-}
-
-.login-orb-1 {
-  width: 500px;
-  height: 500px;
-  background: var(--accent-primary);
-  top: -150px;
-  right: -150px;
-}
-
-.login-orb-2 {
-  width: 400px;
-  height: 400px;
-  background: #7c3aed;
-  bottom: -100px;
-  left: -100px;
 }
 
 .login-card {
@@ -46,53 +104,55 @@
   border-radius: var(--radius-lg);
   padding: 40px 36px;
   box-shadow: var(--shadow-lg);
-  position: relative;
-  z-index: 1;
 }
 
-.login-brand {
-  text-align: center;
-  margin-bottom: 36px;
-}
-
-.login-logo {
-  width: 52px;
-  height: 52px;
-  background: var(--accent-primary);
-  border-radius: var(--radius);
-  display: inline-flex;
+/* ── Card header ── */
+.login-card-header {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  color: #fff;
-  margin-bottom: 16px;
-  box-shadow: 0 8px 24px var(--accent-glow);
+  gap: 14px;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
 }
 
-.login-title {
-  font-size: 26px;
+.login-card-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.login-card-title {
+  font-size: 20px;
   font-weight: 800;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin: 0 0 2px;
+  line-height: 1;
+  letter-spacing: -0.02em;
 }
 
-.login-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
+.login-card-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
 }
 
+/* ── Form ── */
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .login-error {
   font-size: 13px;
   color: var(--danger);
   background: var(--danger-bg);
-  border: 1px solid rgba(244, 63, 94, 0.2);
+  border: 1px solid #fca5a5;
   border-radius: var(--radius-sm);
   padding: 10px 14px;
+  margin: 0;
 }
 
 .otp-info {
@@ -101,10 +161,11 @@
   gap: 10px;
   padding: 12px 14px;
   background: var(--accent-bg);
-  border: 1px solid var(--accent-border, rgba(79, 110, 247, 0.2));
+  border: 1px solid rgba(255, 77, 0, 0.2);
   border-radius: var(--radius-sm);
-  color: var(--text-accent);
-  font-size: 14px;
+  color: var(--accent-primary);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .otp-info svg { flex-shrink: 0; }
@@ -122,3 +183,9 @@
 }
 
 .back-link:hover { color: var(--accent-primary); }
+
+/* ── Responsive: collapse left panel on small screens ── */
+@media (max-width: 860px) {
+  .login-panel-left { display: none; }
+  .login-panel-right { background: var(--bg-primary); }
+}

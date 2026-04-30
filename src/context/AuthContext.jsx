@@ -11,10 +11,10 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = !!TokenService.getAccessToken() && !!user;
 
-  const sendOTP = useCallback(async (phone, password) => {
+  const sendOTP = useCallback(async (phone, password, username) => {
     setLoading(true);
     try {
-      const data = await adminAuthAPI.login(phone, password);
+      const data = await adminAuthAPI.login(phone, password, username);
       setPendingPhone(phone);
       setStep('otp');
       return { success: true, message: data.message };

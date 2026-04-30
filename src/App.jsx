@@ -7,7 +7,10 @@ import Schools from './pages/Schools';
 import Subscriptions from './pages/Subscriptions';
 import Menu from './pages/Menu';
 import CorporateLocations from './pages/CorporateLocations';
-import LookupMealSizes, { LookupStandards } from './pages/Lookup';
+import Payments from './pages/Payments';
+import TrialPlans from './pages/TrialPlans';
+import MasterData from './pages/MasterData';
+import Homepage from './pages/Homepage';
 
 export default function App() {
   return (
@@ -24,8 +27,10 @@ export default function App() {
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/menu" element={<Menu />} />
             <Route path="/corporate-locations" element={<CorporateLocations />} />
-            <Route path="/lookup/meal-sizes" element={<LookupMealSizes />} />
-            <Route path="/lookup/standards" element={<LookupStandards />} />
+            <Route path="/payments" element={<Payments />} />
+            <Route path="/trial-plans" element={<TrialPlans />} />
+            <Route path="/master-data" element={<MasterData />} />
+            <Route path="/homepage" element={<Homepage />} />
           </Route>
 
           {/* Fallback */}

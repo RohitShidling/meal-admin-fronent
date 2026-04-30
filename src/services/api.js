@@ -87,10 +87,10 @@ async function request(endpoint, options = {}) {
 // POST /api/admin/auth/refresh      Body: { refreshToken }
 //   Response: { data: { accessToken, refreshToken } }
 export const adminAuthAPI = {
-  login: (phone, password) =>
+  login: (phone, password, username) =>
     request('/api/admin/auth/login', {
       method: 'POST',
-      body: { phoneNumber: phone, password },
+      body: { phoneNumber: phone, password, username },
     }),
 
   verifyOTP: (phone, otp) =>
@@ -107,6 +107,48 @@ export const adminAuthAPI = {
       method: 'POST',
       body: { refreshToken: TokenService.getRefreshToken() },
     }),
+};
+
+// ─── Admin Dashboard APIs ─────────────────────────────────────────────────────
+export const adminDashboardAPI = {
+  getStats: () => request('/api/admin/dashboard'),
+};
+
+// ─── Admin Analytics APIs ─────────────────────────────────────────────────────
+export const adminAnalyticsAPI = {
+  getOverview: () => request('/api/admin/subscriptions/analytics/overview'),
+  getBySchool: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/by-school${q ? `?${q}` : ''}`);
+  },
+  getChildrenBySchool: (schoolId, params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/school/${schoolId}/children${q ? `?${q}` : ''}`);
+  },
+  getTeacherSubscriptions: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/teachers${q ? `?${q}` : ''}`);
+  },
+  getProfessionalSubscriptions: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/professionals${q ? `?${q}` : ''}`);
+  },
+  getExpiringSoon: (days = 7, entityType = '') => {
+    const q = new URLSearchParams({ days, entityType }).toString();
+    return request(`/api/admin/subscriptions/analytics/expiring-soon?${q}`);
+  },
+  getAllMembersStatus: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/all-members${q ? `?${q}` : ''}`);
+  },
+  getActiveMealStatus: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/active-meal-status${q ? `?${q}` : ''}`);
+  },
+  getNotSubscribed: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/subscriptions/analytics/not-subscribed${q ? `?${q}` : ''}`);
+  },
 };
 
 // ─── Admin Schools APIs ───────────────────────────────────────────────────────
@@ -130,9 +172,22 @@ export const adminSchoolsAPI = {
 // Response POST/PUT: { data: {} } (flat row)
 // Response DELETE: { data: { id } }
 export const adminSubscriptionsAPI = {
+  getAll: () => request('/api/admin/subscriptions'),
+  getById: (id) => request(`/api/admin/subscriptions/${id}`),
   create: (data) => request('/api/admin/subscriptions', { method: 'POST', body: data }),
   update: (id, data) => request(`/api/admin/subscriptions/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/api/admin/subscriptions/${id}`, { method: 'DELETE' }),
+  cancelClientSubscription: (subscriptionId) =>
+    request(`/api/admin/subscriptions/client-subscription/${subscriptionId}`, { method: 'DELETE' }),
+};
+
+export const adminTrialPlansAPI = {
+  getAll: () => request('/api/admin/trial-plans'),
+  getById: (id) => request(`/api/admin/trial-plans/${id}`),
+  create: (data) => request('/api/admin/trial-plans', { method: 'POST', body: data }),
+  update: (id, data) => request(`/api/admin/trial-plans/${id}`, { method: 'PUT', body: data }),
+  setStatus: (id, isActive) => request(`/api/admin/trial-plans/${id}/status`, { method: 'PATCH', body: { isActive } }),
+  delete: (id) => request(`/api/admin/trial-plans/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Admin Menu APIs ──────────────────────────────────────────────────────────
@@ -149,12 +204,50 @@ export const adminMenuAPI = {
     request(`/api/admin/menu/${date}`, { method: 'DELETE' }),
 };
 
+// ─── Admin Meals APIs ────────────────────────────────────────────────────────
+export const adminMealsAPI = {
+  reduceToday: () => request('/api/admin/meals/reduce-today', { method: 'POST' }),
+  getReductionHistory: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/meals/reduction-history${q ? `?${q}` : ''}`);
+  },
+  getDailyLog: (date = 'today') => request(`/api/admin/meals/daily-log/${date}`),
+  getKitchenReport: () => request('/api/admin/meals/kitchen-report/today'),
+  getTokensAll: () => `${BASE_URL}/api/admin/meals/tokens/all?token=${TokenService.getAccessToken()}`,
+};
+
 // ─── Admin Corporate Locations APIs ──────────────────────────────────────────
 // Required: name*, address*, city*, state*   Optional: is_active
 // Response: { data: {} } (flat row)
 export const adminCorporateAPI = {
   create: (data) =>
     request('/api/admin/corporate-locations', { method: 'POST', body: data }),
+  update: (id, data) =>
+    request(`/api/admin/corporate-locations/${id}`, { method: 'PUT', body: data }),
+  delete: (id) =>
+    request(`/api/admin/corporate-locations/${id}`, { method: 'DELETE' }),
+  setStatus: (id, isActive) =>
+    request(`/api/admin/corporate-locations/${id}/status`, { method: 'PATCH', body: { is_active: isActive } }),
+};
+
+export const adminPaymentAPI = {
+  getAll: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/payment/all${q ? `?${q}` : ''}`);
+  },
+  getStats: () => request('/api/admin/payment/stats'),
+};
+
+// ─── Admin Homepage APIs ─────────────────────────────────────────────────────
+// POST /api/admin/homepage            Body: { name, description, display_order }
+// PUT  /api/admin/homepage/:id        Body: { name?, description?, display_order?, is_active? }
+// DELETE /api/admin/homepage/:id
+// GET  /api/common/homepage           (public read — no auth needed)
+export const adminHomepageAPI = {
+  getAll: () => request('/api/common/homepage'),
+  create: (data) => request('/api/admin/homepage', { method: 'POST', body: data }),
+  update: (id, data) => request(`/api/admin/homepage/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => request(`/api/admin/homepage/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Admin Lookup APIs ────────────────────────────────────────────────────────
@@ -162,6 +255,30 @@ export const adminCorporateAPI = {
 export const adminLookupAPI = {
   getMealSizes: () => request('/api/admin/lookup/meal-sizes'),
   getStandards: () => request('/api/admin/lookup/standards'),
+};
+
+export const adminMasterDataAPI = {
+  getAllStates: () => request('/api/admin/lookup/states'),
+  createState: (data) => request('/api/admin/lookup/states', { method: 'POST', body: data }),
+  updateState: (id, data) => request(`/api/admin/lookup/states/${id}`, { method: 'PUT', body: data }),
+  deleteState: (id) => request(`/api/admin/lookup/states/${id}`, { method: 'DELETE' }),
+
+  getAllCities: () => request('/api/admin/lookup/cities'),
+  createCity: (data) => request('/api/admin/lookup/cities', { method: 'POST', body: data }),
+  updateCity: (id, data) => request(`/api/admin/lookup/cities/${id}`, { method: 'PUT', body: data }),
+  deleteCity: (id) => request(`/api/admin/lookup/cities/${id}`, { method: 'DELETE' }),
+
+  getAllCompanies: () => request('/api/admin/lookup/companies'),
+  createCompany: (data) => request('/api/admin/lookup/companies', { method: 'POST', body: data }),
+  updateCompany: (id, data) => request(`/api/admin/lookup/companies/${id}`, { method: 'PUT', body: data }),
+  deleteCompany: (id) => request(`/api/admin/lookup/companies/${id}`, { method: 'DELETE' }),
+
+  getAllMealSizes: () => request('/api/admin/lookup/meal-sizes'),
+  createMealSize: (data) => request('/api/admin/lookup/meal-sizes', { method: 'POST', body: data }),
+  updateMealSize: (id, data) => request(`/api/admin/lookup/meal-sizes/${id}`, { method: 'PUT', body: data }),
+  deleteMealSize: (id) => request(`/api/admin/lookup/meal-sizes/${id}`, { method: 'DELETE' }),
+
+  getAllStandards: () => request('/api/admin/lookup/standards'),
 };
 
 // ─── Common APIs ──────────────────────────────────────────────────────────────
@@ -178,6 +295,9 @@ export const commonAPI = {
   getSchools: () => request('/api/common/schools'),
   getMealSizes: () => request('/api/common/lookup/meal-sizes'),
   getStandards: () => request('/api/common/lookup/standards'),
+  getStates: () => request('/api/common/lookup/states'),
+  getCities: (stateId) => request(`/api/common/lookup/cities${stateId ? `?stateId=${stateId}` : ''}`),
+  getCompanies: (cityId) => request(`/api/common/lookup/companies${cityId ? `?cityId=${cityId}` : ''}`),
   getCorporateLocations: () => request('/api/common/corporate-locations'),
   getSubscriptions: () => request('/api/common/subscriptions'),
   getSubscriptionById: (id) => request(`/api/common/subscriptions/${id}`),

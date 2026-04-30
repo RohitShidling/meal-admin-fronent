@@ -9,6 +9,7 @@ export default function LoginPage() {
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
 
@@ -18,7 +19,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     if (!phone || !password) { setError('Please enter phone and password.'); return; }
-    const res = await sendOTP(phone, password);
+    const res = await sendOTP(phone, password, username);
     if (!res.success) setError(res.message || 'Failed to send OTP');
   };
 
@@ -64,6 +65,15 @@ export default function LoginPage() {
               onChange={(e) => setPhone(e.target.value)}
               required
               autoComplete="tel"
+            />
+            <Input
+              id="admin-username"
+              label="Admin Name (Optional)"
+              type="text"
+              placeholder="e.g. John Doe"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="name"
             />
             <Input
               id="admin-password"

@@ -1,45 +1,29 @@
 import { useEffect, useState } from 'react';
-import { commonAPI, adminLookupAPI } from '../services/api';
+import { adminDashboardAPI } from '../services/api';
 import { Spinner } from '../components/FormElements';
 import '../components/Layout.css';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ schools: 0, subscriptions: 0, locations: 0, menus: 0 });
+  const [stats, setStats] = useState({ schools: 0, subscriptions: 0, locations: 0, menus: 0, revenue: 0 });
   const [mealSizes, setMealSizes] = useState([]);
   const [standards, setStandards] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.allSettled([
-      commonAPI.getSchools(),           // { data: { schools: [] } } or { data: [] }
-      commonAPI.getSubscriptions(),     // { count, data: [] }
-      commonAPI.getCorporateLocations(),// { count, data: [] }
-      commonAPI.getMenuHistory(),       // { count, data: [] }
-      adminLookupAPI.getMealSizes(),    // { data: { mealSizes: [] } }
-      adminLookupAPI.getStandards(),    // { data: { standards: [] } }
-    ]).then(([schools, subs, locs, menus, sizes, stds]) => {
-      // Schools can be { data: { schools: [] } } or { data: [] }
-      const schoolList = schools.value?.data?.schools ?? (Array.isArray(schools.value?.data) ? schools.value.data : []);
-      const subList = Array.isArray(subs.value?.data) ? subs.value.data : [];
-      const locList = Array.isArray(locs.value?.data) ? locs.value.data : [];
-      const menuList = Array.isArray(menus.value?.data) ? menus.value.data : [];
-
-      setStats({
-        schools: schools.value?.count ?? schoolList.length,
-        subscriptions: subs.value?.count ?? subList.length,
-        locations: locs.value?.count ?? locList.length,
-        menus: menus.value?.count ?? menuList.length,
-      });
-
-      setMealSizes(sizes.value?.data?.mealSizes ?? []);
-      setStandards(stds.value?.data?.standards ?? []);
-      setLoading(false);
-    });
+    adminDashboardAPI.getStats()
+      .then((res) => {
+        setStats(res.data.stats);
+        setMealSizes(res.data.mealSizes);
+        setStandards(res.data.standards);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const statCards = [
     { label: 'Total Schools', value: stats.schools, icon: SchoolIcon, cls: 'stat-icon-blue' },
-    { label: 'Subscriptions', value: stats.subscriptions, icon: CardIcon, cls: 'stat-icon-green' },
+    { label: 'Revenue', value: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(stats.revenue), icon: RevenueIcon, cls: 'stat-icon-green' },
+    { label: 'Subscriptions', value: stats.subscriptions, icon: CardIcon, cls: 'stat-icon-blue' },
     { label: 'Corporate Locations', value: stats.locations, icon: PinIcon, cls: 'stat-icon-orange' },
     { label: 'Menu Entries', value: stats.menus, icon: MenuIcon, cls: 'stat-icon-red' },
   ];
@@ -127,4 +111,7 @@ function PinIcon() {
 }
 function MenuIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>;
+}
+function RevenueIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 }

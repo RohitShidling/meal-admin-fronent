@@ -9,7 +9,7 @@
 .login-panel-left {
   width: 420px;
   min-width: 420px;
-  background: #111111;
+  background: var(--bg-primary);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -20,33 +20,18 @@
 .login-brand-block {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  text-align: center;
   gap: 8px;
   margin-bottom: 48px;
+  width: 100%;
 }
 
 .login-brand-logo {
-  width: 72px;
-  height: 72px;
+  width: 240px;
+  height: 240px;
   object-fit: contain;
-  margin-bottom: 12px;
-}
-
-.login-brand-name {
-  font-size: 36px;
-  font-weight: 800;
-  color: #ffffff;
-  letter-spacing: 0.06em;
-  margin: 0;
-  line-height: 1;
-}
-
-.login-brand-tagline {
-  font-size: 14px;
-  color: rgba(255,255,255,0.45);
-  margin: 0;
-  font-weight: 400;
-  letter-spacing: 0.02em;
+  margin-bottom: 24px;
 }
 
 .login-features {
@@ -61,7 +46,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  color: rgba(255,255,255,0.75);
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
 }
@@ -69,8 +54,8 @@
 .login-feature-icon {
   width: 36px;
   height: 36px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -81,7 +66,7 @@
 
 .login-panel-footer {
   font-size: 12px;
-  color: rgba(255,255,255,0.25);
+  color: var(--text-muted);
   margin: 0;
   margin-top: 48px;
 }
@@ -93,32 +78,35 @@
   align-items: center;
   justify-content: center;
   padding: 40px 24px;
-  background: var(--bg-primary);
+  background: #cb835d;
+  /* A slightly darker, richer orange tint */
 }
 
 .login-card {
   width: 100%;
   max-width: 420px;
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 77, 0, 0.15);
   border-radius: var(--radius-lg);
   padding: 40px 36px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 40px rgba(255, 77, 0, 0.12);
 }
 
 /* ── Card header ── */
 .login-card-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  text-align: center;
+  gap: 16px;
   margin-bottom: 32px;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--border);
 }
 
 .login-card-logo {
-  width: 44px;
-  height: 44px;
+  width: 76px;
+  height: 76px;
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -168,7 +156,9 @@
   font-weight: 500;
 }
 
-.otp-info svg { flex-shrink: 0; }
+.otp-info svg {
+  flex-shrink: 0;
+}
 
 .back-link {
   background: none;
@@ -182,10 +172,17 @@
   font-family: inherit;
 }
 
-.back-link:hover { color: var(--accent-primary); }
+.back-link:hover {
+  color: var(--accent-primary);
+}
 
 /* ── Responsive: collapse left panel on small screens ── */
 @media (max-width: 860px) {
-  .login-panel-left { display: none; }
-  .login-panel-right { background: var(--bg-primary); }
+  .login-panel-left {
+    display: none;
+  }
+
+  .login-panel-right {
+    background: #ffe1d1;
+  }
 }

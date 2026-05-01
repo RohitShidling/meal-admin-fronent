@@ -34,6 +34,11 @@ async function request(endpoint, options = {}) {
     }
   }
 
+  // Clear cache on any mutation (POST, PUT, DELETE, PATCH)
+  if (!isGet) {
+    requestCache.clear();
+  }
+
   const token = TokenService.getAccessToken();
   const headers = {
     ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),

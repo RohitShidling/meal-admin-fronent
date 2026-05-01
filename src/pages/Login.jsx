@@ -18,7 +18,10 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    if (!phone || !password) { setError('Please enter phone and password.'); return; }
+    if (!phone || !password || !username) { 
+      setError('Please enter phone, password and username.'); 
+      return; 
+    }
     const res = await sendOTP(phone, password, username);
     if (!res.success) setError(res.message || 'Failed to send OTP');
   };
@@ -38,8 +41,6 @@ export default function LoginPage() {
       <div className="login-panel-left">
         <div className="login-brand-block">
           <img src="/logo.png" alt="Buuttii" className="login-brand-logo" />
-          <h1 className="login-brand-name">BUUTTII</h1>
-          <p className="login-brand-tagline">Nutrition in Every Meal</p>
         </div>
         <div className="login-features">
           {[
@@ -63,7 +64,6 @@ export default function LoginPage() {
 
           {/* Header */}
           <div className="login-card-header">
-            <img src="/logo.png" alt="Buuttii" className="login-card-logo" />
             <div>
               <h2 className="login-card-title">
                 {step === 'login' ? 'Admin Sign In' : 'Verify OTP'}
@@ -90,11 +90,12 @@ export default function LoginPage() {
               />
               <Input
                 id="admin-username"
-                label="Your Name (Optional)"
+                label="Admin Username"
                 type="text"
-                placeholder="e.g. Rohit Shidling"
+                placeholder="Enter your username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                required
                 autoComplete="name"
               />
               <Input

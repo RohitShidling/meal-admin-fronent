@@ -268,11 +268,6 @@ export const adminMasterDataAPI = {
   updateCity: (id, data) => request(`/api/admin/lookup/cities/${id}`, { method: 'PUT', body: data }),
   deleteCity: (id) => request(`/api/admin/lookup/cities/${id}`, { method: 'DELETE' }),
 
-  getAllCompanies: () => request('/api/admin/lookup/companies'),
-  createCompany: (data) => request('/api/admin/lookup/companies', { method: 'POST', body: data }),
-  updateCompany: (id, data) => request(`/api/admin/lookup/companies/${id}`, { method: 'PUT', body: data }),
-  deleteCompany: (id) => request(`/api/admin/lookup/companies/${id}`, { method: 'DELETE' }),
-
   getAllMealSizes: () => request('/api/admin/lookup/meal-sizes'),
   createMealSize: (data) => request('/api/admin/lookup/meal-sizes', { method: 'POST', body: data }),
   updateMealSize: (id, data) => request(`/api/admin/lookup/meal-sizes/${id}`, { method: 'PUT', body: data }),
@@ -297,7 +292,6 @@ export const commonAPI = {
   getStandards: () => request('/api/common/lookup/standards'),
   getStates: () => request('/api/common/lookup/states'),
   getCities: (stateId) => request(`/api/common/lookup/cities${stateId ? `?stateId=${stateId}` : ''}`),
-  getCompanies: (cityId) => request(`/api/common/lookup/companies${cityId ? `?cityId=${cityId}` : ''}`),
   getCorporateLocations: () => request('/api/common/corporate-locations'),
   getSubscriptions: () => request('/api/common/subscriptions'),
   getSubscriptionById: (id) => request(`/api/common/subscriptions/${id}`),

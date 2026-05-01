@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminSubscriptionsAPI, commonAPI } from '../services/api';
+import { adminSubscriptionsAPI, adminTrialPlansAPI } from '../services/api';
 import { Button, EmptyState, Spinner, Badge, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
@@ -31,19 +31,34 @@ export default function Subscriptions() {
   const fetchSubscriptions = useCallback(async () => {
     setLoading(true);
     try {
-      // Uses admin endpoint so ALL plans (incl. inactive) are returned
-      const res = await adminSubscriptionsAPI.getAll();
-      setSubscriptions(Array.isArray(res?.data) ? res.data : []);
+      const [subRes, trialRes] = await Promise.all([
+        adminSubscriptionsAPI.getAll().catch(() => ({ data: [] })),
+        adminTrialPlansAPI.getAll().catch(() => ({ data: [] }))
+      ]);
+      
+      // The backend subscriptions endpoint returns ALL plans, including trials.
+      // We filter out plans with trial_days > 0 from the regular list to avoid duplicates.
+      const rawRegular = Array.isArray(subRes?.data) ? subRes.data.filter(s => !s.trial_days || s.trial_days <= 0) : [];
+      const regularSubs = rawRegular.map(s => ({ ...s, _type: 'regular' }));
+      
+      const trialSubs = Array.isArray(trialRes?.data) ? trialRes.data.map(s => ({ ...s, _type: 'trial' })) : [];
+      
+      const combined = [...regularSubs, ...trialSubs].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      setSubscriptions(combined);
     } catch (err) {
-      toast.error(err.message || 'Failed to load subscriptions');
+      toast.error('Failed to load plans');
     } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchSubscriptions(); }, [fetchSubscriptions]);
 
-  const openCreate = () => {
-    setEditTarget(null);
-    setForm(INITIAL_FORM);
+  const openCreate = (type = 'regular') => {
+    setEditTarget({ _type: type }); // dummy target to hold the type
+    setForm({
+      ...INITIAL_FORM,
+      billing_cycle: type === 'trial' ? 'daily' : 'monthly',
+      trial_days: type === 'trial' ? '7' : '0'
+    });
     setErrors({});
     setModalOpen(true);
   };
@@ -53,8 +68,8 @@ export default function Subscriptions() {
     setForm({
       plan_name: sub.plan_name || '',
       price: sub.price?.toString() || '',
-      billing_cycle: sub.billing_cycle || 'monthly',
-      trial_days: sub.trial_days?.toString() || '0',
+      billing_cycle: sub.billing_cycle || (sub._type === 'trial' ? 'daily' : 'monthly'),
+      trial_days: sub.trial_days?.toString() || (sub._type === 'trial' ? '7' : '0'),
       display_order: sub.display_order?.toString() || '1',
       is_active: sub.is_active ?? true,
     });
@@ -64,9 +79,13 @@ export default function Subscriptions() {
 
   const validate = () => {
     const e = {};
+    const isTrial = editTarget?._type === 'trial';
+    
     if (!form.plan_name.trim()) e.plan_name = 'Plan name is required';
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) < 0) e.price = 'Valid price required';
-    if (!form.billing_cycle) e.billing_cycle = 'Billing cycle is required';
+    if (!isTrial && !form.billing_cycle) e.billing_cycle = 'Billing cycle is required';
+    if (isTrial && (!form.trial_days || Number(form.trial_days) <= 0)) e.trial_days = 'Trial duration must be at least 1 day';
+    
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -75,21 +94,28 @@ export default function Subscriptions() {
     e.preventDefault();
     if (!validate()) return;
     setSaving(true);
+    
+    const isTrial = editTarget?._type === 'trial';
+    
     const payload = {
       plan_name: form.plan_name,
       price: Number(form.price),
-      billing_cycle: form.billing_cycle,
-      trial_days: Number(form.trial_days) || 0,
+      billing_cycle: isTrial ? 'daily' : form.billing_cycle,
+      trial_days: isTrial ? Number(form.trial_days) : 0,
       display_order: Number(form.display_order) || 1,
       is_active: form.is_active,
     };
+    
+    const api = isTrial ? adminTrialPlansAPI : adminSubscriptionsAPI;
+    const isUpdate = editTarget && editTarget.id;
+
     try {
-      if (editTarget) {
-        await adminSubscriptionsAPI.update(editTarget.id, payload);
-        toast.success('Subscription updated');
+      if (isUpdate) {
+        await api.update(editTarget.id, payload);
+        toast.success(`${isTrial ? 'Trial ' : ''}Plan updated`);
       } else {
-        await adminSubscriptionsAPI.create(payload);
-        toast.success('Subscription created');
+        await api.create(payload);
+        toast.success(`${isTrial ? 'Trial ' : ''}Plan created`);
       }
       setModalOpen(false);
       fetchSubscriptions();
@@ -101,9 +127,10 @@ export default function Subscriptions() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    const api = deleteTarget._type === 'trial' ? adminTrialPlansAPI : adminSubscriptionsAPI;
     try {
-      await adminSubscriptionsAPI.delete(deleteTarget.id);
-      toast.success('Subscription deleted');
+      await api.delete(deleteTarget.id);
+      toast.success('Plan deleted');
       setDeleteTarget(null);
       fetchSubscriptions();
     } catch (err) {
@@ -123,9 +150,12 @@ export default function Subscriptions() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Subscriptions</h1>
-          <p className="page-subtitle">Manage meal subscription plans</p>
+          <p className="page-subtitle">Manage meal subscription and trial plans</p>
         </div>
-        <Button icon={<PlusIcon />} onClick={openCreate} id="add-subscription-btn">Add Plan</Button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button variant="secondary" icon={<PlusIcon />} onClick={() => openCreate('trial')} id="add-trial-btn">Add Trial</Button>
+          <Button icon={<PlusIcon />} onClick={() => openCreate('regular')} id="add-subscription-btn">Add Plan</Button>
+        </div>
       </div>
 
       {loading ? (
@@ -135,8 +165,13 @@ export default function Subscriptions() {
           <EmptyState
             icon={<SubSVG />}
             title="No subscription plans"
-            description="Create your first subscription plan"
-            action={<Button onClick={openCreate} icon={<PlusIcon />}>Add Plan</Button>}
+            description="Create your first subscription or trial plan"
+            action={
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <Button onClick={() => openCreate('regular')} icon={<PlusIcon />}>Add Plan</Button>
+                <Button variant="secondary" onClick={() => openCreate('trial')} icon={<PlusIcon />}>Add Trial</Button>
+              </div>
+            }
           />
         </div>
       ) : (
@@ -145,7 +180,10 @@ export default function Subscriptions() {
             <div key={sub.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div>
-                  <h3 style={{ fontSize: 16, fontWeight: 700 }}>{sub.plan_name}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 700 }}>{sub.plan_name}</h3>
+                    {sub._type === 'trial' && <Badge variant="warning">TRIAL PLAN</Badge>}
+                  </div>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Order #{sub.display_order}</p>
                 </div>
                 <Badge variant={sub.is_active ? 'success' : 'default'}>{sub.is_active ? 'Active' : 'Inactive'}</Badge>
@@ -177,12 +215,12 @@ export default function Subscriptions() {
       )}
 
       {/* Modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editTarget ? 'Edit Subscription' : 'New Subscription Plan'} size="md">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={(editTarget && editTarget.id ? 'Edit ' : 'New ') + (editTarget?._type === 'trial' ? 'Trial Plan' : 'Subscription Plan')} size="md">
         <form onSubmit={handleSave} id="subscription-form">
           <Input
             id="sub-plan-name"
             label="Plan Name"
-            placeholder="e.g. Monthly Lunch Plan"
+            placeholder={editTarget?._type === 'trial' ? "e.g. 7-Day Demo" : "e.g. Monthly Lunch Plan"}
             error={errors.plan_name}
             required
             {...f('plan_name')}
@@ -199,24 +237,29 @@ export default function Subscriptions() {
               required
               {...f('price')}
             />
-            <Select id="sub-billing-cycle" label="Billing Cycle" error={errors.billing_cycle} required {...f('billing_cycle')}>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="yearly">Yearly</option>
-            </Select>
+            {editTarget?._type === 'trial' ? (
+              <Input
+                id="sub-trial-days"
+                label="Trial Duration (Days)"
+                type="number"
+                min="1"
+                placeholder="7"
+                error={errors.trial_days}
+                required
+                {...f('trial_days')}
+              />
+            ) : (
+              <Select id="sub-billing-cycle" label="Billing Cycle" error={errors.billing_cycle} required {...f('billing_cycle')}>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+              </Select>
+            )}
           </div>
+          
           <div className="form-row form-row-2" style={{ marginTop: 16 }}>
-            <Input
-              id="sub-trial-days"
-              label="Trial Days"
-              type="number"
-              min="0"
-              placeholder="0"
-              hint="0 means no trial"
-              {...f('trial_days')}
-            />
             <Input
               id="sub-display-order"
               label="Display Order"
@@ -225,23 +268,23 @@ export default function Subscriptions() {
               placeholder="1"
               {...f('display_order')}
             />
-          </div>
-          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input
-              id="sub-active"
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
-              style={{ width: 16, height: 16, accentColor: 'var(--accent-primary)' }}
-            />
-            <label htmlFor="sub-active" style={{ fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer' }}>
-              Active (visible to clients)
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 30 }}>
+              <input
+                id="sub-active"
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+                style={{ width: 16, height: 16, accentColor: 'var(--accent-primary)' }}
+              />
+              <label htmlFor="sub-active" style={{ fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer', userSelect: 'none' }}>
+                Active (visible to clients)
+              </label>
+            </div>
           </div>
           <div className="form-actions" style={{ marginTop: 24 }}>
             <Button variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button type="submit" loading={saving} id="sub-save-btn">
-              {editTarget ? 'Update Plan' : 'Create Plan'}
+              {editTarget && editTarget.id ? 'Update Plan' : 'Create Plan'}
             </Button>
           </div>
         </form>

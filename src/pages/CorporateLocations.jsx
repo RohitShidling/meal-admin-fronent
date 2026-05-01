@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { adminCorporateAPI, commonAPI } from '../services/api';
 import { Button, EmptyState, Spinner, Badge, ConfirmDialog } from '../components/FormElements';
-import { Input } from '../components/FormElements';
+import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
@@ -20,6 +20,22 @@ export default function CorporateLocations() {
   const [deleting, setDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
 
+  const [statesList, setStatesList] = useState([]);
+  const [citiesList, setCitiesList] = useState([]);
+  const [selectedStateId, setSelectedStateId] = useState('');
+
+  useEffect(() => {
+    commonAPI.getStates().then(res => setStatesList(res?.data || []));
+  }, []);
+
+  useEffect(() => {
+    if (selectedStateId) {
+      commonAPI.getCities(selectedStateId).then(res => setCitiesList(res?.data || []));
+    } else {
+      setCitiesList([]);
+    }
+  }, [selectedStateId]);
+
   const fetchLocations = useCallback(async () => {
     setLoading(true);
     try {
@@ -35,6 +51,7 @@ export default function CorporateLocations() {
   const openCreate = () => {
     setEditTarget(null);
     setForm(INITIAL_FORM);
+    setSelectedStateId('');
     setErrors({});
     setModalOpen(true);
   };
@@ -42,6 +59,11 @@ export default function CorporateLocations() {
   const openEdit = (loc) => {
     setEditTarget(loc);
     setForm({ name: loc.name || '', address: loc.address || '', city: loc.city || '', state: loc.state || '', is_active: loc.is_active ?? true });
+    
+    // Attempt to find the state ID from the state name so cities can load
+    const st = statesList.find(s => s.name === loc.state);
+    setSelectedStateId(st ? st.id : '');
+
     setErrors({});
     setModalOpen(true);
   };
@@ -191,8 +213,33 @@ export default function CorporateLocations() {
             <Input id="loc-address" label="Address" placeholder="Full street address" error={errors.address} required {...f('address')} />
           </div>
           <div className="form-row form-row-2" style={{ marginTop: 16 }}>
-            <Input id="loc-city" label="City" placeholder="City" error={errors.city} required {...f('city')} />
-            <Input id="loc-state" label="State" placeholder="State" error={errors.state} required {...f('state')} />
+            <Select
+              id="loc-state"
+              label="State"
+              error={errors.state}
+              required
+              value={form.state}
+              onChange={(e) => {
+                const st = statesList.find(s => s.name === e.target.value);
+                setSelectedStateId(st ? st.id : '');
+                setForm(p => ({ ...p, state: e.target.value, city: '' }));
+              }}
+            >
+              <option value="">Select State</option>
+              {statesList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </Select>
+
+            <Select
+              id="loc-city"
+              label="City"
+              error={errors.city}
+              required
+              disabled={!selectedStateId}
+              {...f('city')}
+            >
+              <option value="">Select City</option>
+              {citiesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </Select>
           </div>
           <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
             <input

@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
-const TABS = ['States', 'Cities', 'Companies', 'Meal Sizes', 'Standards'];
+const TABS = ['States', 'Cities', 'Meal Sizes', 'Standards'];
 
 function MasterData() {
   const [activeTab, setActiveTab] = useState('States');
@@ -33,9 +33,6 @@ function MasterData() {
       } else if (activeTab === 'Cities') {
         const res = await adminMasterDataAPI.getAllCities();
         setData(res?.data ?? []);
-      } else if (activeTab === 'Companies') {
-        const res = await adminMasterDataAPI.getAllCompanies();
-        setData(res?.data ?? []);
       } else if (activeTab === 'Meal Sizes') {
         const res = await adminMasterDataAPI.getAllMealSizes();
         setData(res?.data?.mealSizes ?? []);
@@ -52,11 +49,8 @@ function MasterData() {
 
   useEffect(() => {
     fetchData();
-    if (activeTab === 'Cities' || activeTab === 'Companies') {
+    if (activeTab === 'Cities') {
       commonAPI.getStates().then(res => setStatesList(res?.data ?? []));
-    }
-    if (activeTab === 'Companies') {
-      commonAPI.getCities().then(res => setCitiesList(res?.data ?? []));
     }
   }, [fetchData, activeTab]);
 
@@ -88,7 +82,6 @@ function MasterData() {
       const payload = { name: form.name, isActive: form.isActive };
       
       if (activeTab === 'Cities') payload.stateId = Number(form.stateId);
-      if (activeTab === 'Companies') payload.cityId = Number(form.cityId) || null;
       if (activeTab === 'Meal Sizes') {
         payload.displayName = form.displayName;
         payload.sortOrder = Number(form.sortOrder);
@@ -97,13 +90,11 @@ function MasterData() {
       if (editTarget) {
         if (activeTab === 'States') await adminMasterDataAPI.updateState(editTarget.id, payload);
         if (activeTab === 'Cities') await adminMasterDataAPI.updateCity(editTarget.id, payload);
-        if (activeTab === 'Companies') await adminMasterDataAPI.updateCompany(editTarget.id, payload);
         if (activeTab === 'Meal Sizes') await adminMasterDataAPI.updateMealSize(editTarget.id, payload);
         toast.success('Updated successfully');
       } else {
         if (activeTab === 'States') await adminMasterDataAPI.createState(payload);
         if (activeTab === 'Cities') await adminMasterDataAPI.createCity(payload);
-        if (activeTab === 'Companies') await adminMasterDataAPI.createCompany(payload);
         if (activeTab === 'Meal Sizes') await adminMasterDataAPI.createMealSize(payload);
         toast.success('Created successfully');
       }
@@ -121,7 +112,6 @@ function MasterData() {
     try {
       if (activeTab === 'States') await adminMasterDataAPI.deleteState(deleteTarget.id);
       if (activeTab === 'Cities') await adminMasterDataAPI.deleteCity(deleteTarget.id);
-      if (activeTab === 'Companies') await adminMasterDataAPI.deleteCompany(deleteTarget.id);
       if (activeTab === 'Meal Sizes') await adminMasterDataAPI.deleteMealSize(deleteTarget.id);
       toast.success('Deleted successfully');
       setDeleteTarget(null);
@@ -186,7 +176,6 @@ function MasterData() {
               
               <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                 {activeTab === 'Cities' && <span>State: {item.state_name}</span>}
-                {activeTab === 'Companies' && <span>City ID: {item.city_id || 'N/A'}</span>}
                 {activeTab === 'Meal Sizes' && <span>Code: {item.name} | Order: {item.sort_order}</span>}
                 {activeTab === 'Standards' && <span>Grade: {item.numeric_value}</span>}
               </div>
@@ -211,13 +200,6 @@ function MasterData() {
             <Select label="State" required {...f('stateId')} style={{ marginTop: 12 }}>
               <option value="">Select State</option>
               {statesList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Select>
-          )}
-
-          {activeTab === 'Companies' && (
-            <Select label="City (Optional)" {...f('cityId')} style={{ marginTop: 12 }}>
-              <option value="">None</option>
-              {citiesList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           )}
 

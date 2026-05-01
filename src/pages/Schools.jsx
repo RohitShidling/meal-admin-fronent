@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminSchoolsAPI } from '../services/api';
+import { adminSchoolsAPI, commonAPI } from '../services/api';
 import { Button, EmptyState, Spinner, Badge, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
@@ -23,6 +23,22 @@ export default function Schools() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [statesList, setStatesList] = useState([]);
+  const [citiesList, setCitiesList] = useState([]);
+  const [selectedStateId, setSelectedStateId] = useState('');
+
+  useEffect(() => {
+    commonAPI.getStates().then(res => setStatesList(res?.data || []));
+  }, []);
+
+  useEffect(() => {
+    if (selectedStateId) {
+      commonAPI.getCities(selectedStateId).then(res => setCitiesList(res?.data || []));
+    } else {
+      setCitiesList([]);
+    }
+  }, [selectedStateId]);
 
   const limit = 10;
 
@@ -49,6 +65,7 @@ export default function Schools() {
   const openCreate = () => {
     setEditTarget(null);
     setForm(INITIAL_FORM);
+    setSelectedStateId('');
     setErrors({});
     setModalOpen(true);
   };
@@ -64,6 +81,10 @@ export default function Schools() {
       country: school.country || 'India',
       is_active: school.is_active ?? true,
     });
+
+    const st = statesList.find(s => s.name === school.state);
+    setSelectedStateId(st ? st.id : '');
+
     setErrors({});
     setModalOpen(true);
   };
@@ -216,8 +237,34 @@ export default function Schools() {
             <Input id="school-address" label="Address" placeholder="Full address" error={errors.address} required {...f('address')} />
           </div>
           <div className="form-row form-row-3" style={{ marginTop: 16 }}>
-            <Input id="school-city" label="City" placeholder="City" error={errors.city} required {...f('city')} />
-            <Input id="school-state" label="State" placeholder="State" error={errors.state} required {...f('state')} />
+            <Select
+              id="school-state"
+              label="State"
+              error={errors.state}
+              required
+              value={form.state}
+              onChange={(e) => {
+                const st = statesList.find(s => s.name === e.target.value);
+                setSelectedStateId(st ? st.id : '');
+                setForm(p => ({ ...p, state: e.target.value, city: '' }));
+              }}
+            >
+              <option value="">Select State</option>
+              {statesList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </Select>
+
+            <Select
+              id="school-city"
+              label="City"
+              error={errors.city}
+              required
+              disabled={!selectedStateId}
+              {...f('city')}
+            >
+              <option value="">Select City</option>
+              {citiesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </Select>
+
             <Input id="school-pincode" label="Pincode" placeholder="560001" error={errors.pincode} required {...f('pincode')} />
           </div>
           {editTarget && (

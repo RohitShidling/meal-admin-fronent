@@ -222,9 +222,12 @@ export const adminMealsAPI = {
 };
 
 // ─── Admin Corporate Locations APIs ──────────────────────────────────────────
-// Required: name*, address*, city*, state*   Optional: is_active
-// Response: { data: {} } (flat row)
+// GET  /api/admin/corporate-locations              Get all corporate locations
+// POST /api/admin/corporate-locations              Body: { name*, address*, city*, state*, is_active }
+// PUT  /api/admin/corporate-locations/{id}         Body: { name?, address?, city?, state?, is_active? }
+// DELETE /api/admin/corporate-locations/{id}       Delete a location
 export const adminCorporateAPI = {
+  getAll: () => request('/api/admin/corporate-locations'),
   create: (data) =>
     request('/api/admin/corporate-locations', { method: 'POST', body: data }),
   update: (id, data) =>
@@ -244,12 +247,15 @@ export const adminPaymentAPI = {
 };
 
 // ─── Admin Homepage APIs ─────────────────────────────────────────────────────
-// POST /api/admin/homepage            Body: { name, description, display_order }
-// PUT  /api/admin/homepage/:id        Body: { name?, description?, display_order?, is_active? }
+// GET  /api/admin/homepage            Returns both active and inactive sections (includes entity_name)
+// POST /api/admin/homepage            Body: { entity_id, name, description, display_order }
+// PUT  /api/admin/homepage/:id        Body: { entity_id?, name?, description?, display_order?, is_active? }
 // DELETE /api/admin/homepage/:id
-// GET  /api/common/homepage           (public read — no auth needed)
 export const adminHomepageAPI = {
-  getAll: () => request('/api/common/homepage'),
+  getAll: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/homepage${q ? `?${q}` : ''}`);
+  },
   create: (data) => request('/api/admin/homepage', { method: 'POST', body: data }),
   update: (id, data) => request(`/api/admin/homepage/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/api/admin/homepage/${id}`, { method: 'DELETE' }),
@@ -281,6 +287,18 @@ export const adminMasterDataAPI = {
   getAllStandards: () => request('/api/admin/lookup/standards'),
 };
 
+// ─── Admin Entities APIs ─────────────────────────────────────────────────────
+// GET  /api/admin/entities           Get all entities (including inactive)
+// POST /api/admin/entities           Create a new entity (Body: { name })
+// PUT  /api/admin/entities/{id}      Update an entity (Body: { name?, is_active? })
+// DELETE /api/admin/entities/{id}    Delete an entity
+export const adminEntitiesAPI = {
+  getAll: () => request('/api/admin/entities'),
+  create: (data) => request('/api/admin/entities', { method: 'POST', body: data }),
+  update: (id, data) => request(`/api/admin/entities/${id}`, { method: 'PUT', body: data }),
+  delete: (id) => request(`/api/admin/entities/${id}`, { method: 'DELETE' }),
+};
+
 // ─── Common APIs ──────────────────────────────────────────────────────────────
 // GET /api/common/subscriptions          Response: { count, data: [] }
 // GET /api/common/subscriptions/:id      Response: { data: {} }
@@ -288,15 +306,21 @@ export const adminMasterDataAPI = {
 // GET /api/common/menu/history/all       Response: { count, data: [] }
 //   Menu row: { id, image_url, items, menu_date, created_at }
 // GET /api/common/menu/:date             Response: { data: {} }
-// GET /api/common/schools                (via commonRoutes)
+// GET /api/admin/schools                 Get all schools with pagination and search
+//   Query params: page (default 1), limit (default 10), search
+//   Response: { success, message, data: { schools: [], pagination: { currentPage, totalPages, totalItems, itemsPerPage } } }
 // GET /api/common/lookup/meal-sizes      Response: { data: { mealSizes: [] } }
 // GET /api/common/lookup/standards       Response: { data: { standards: [] } }
 export const commonAPI = {
-  getSchools: () => request('/api/common/schools'),
+  getSchools: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/schools${q ? `?${q}` : ''}`);
+  },
   getMealSizes: () => request('/api/common/lookup/meal-sizes'),
   getStandards: () => request('/api/common/lookup/standards'),
   getStates: () => request('/api/common/lookup/states'),
   getCities: (stateId) => request(`/api/common/lookup/cities${stateId ? `?stateId=${stateId}` : ''}`),
+  getEntities: () => request('/api/admin/entities'),
   getCorporateLocations: () => request('/api/common/corporate-locations'),
   getSubscriptions: () => request('/api/common/subscriptions'),
   getSubscriptionById: (id) => request(`/api/common/subscriptions/${id}`),

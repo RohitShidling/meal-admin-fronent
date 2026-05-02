@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminMasterDataAPI, commonAPI } from '../services/api';
+import { adminMasterDataAPI, adminEntitiesAPI, commonAPI } from '../services/api';
 import { Button, EmptyState, Spinner, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
-const TABS = ['States', 'Cities', 'Meal Sizes', 'Standards'];
+const TABS = ['States', 'Cities', 'Meal Sizes', 'Standards', 'Entities'];
 
 function MasterData() {
   const [activeTab, setActiveTab] = useState('States');
@@ -39,6 +39,9 @@ function MasterData() {
       } else if (activeTab === 'Standards') {
         const res = await adminMasterDataAPI.getAllStandards();
         setData(res?.data?.standards ?? []);
+      } else if (activeTab === 'Entities') {
+        const res = await adminEntitiesAPI.getAll();
+        setData(res?.data ?? []);
       }
     } catch (err) {
       toast.error(`Failed to load ${activeTab}`);
@@ -79,23 +82,30 @@ function MasterData() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { name: form.name, isActive: form.isActive };
+      let payload = { name: form.name };
       
-      if (activeTab === 'Cities') payload.stateId = Number(form.stateId);
-      if (activeTab === 'Meal Sizes') {
-        payload.displayName = form.displayName;
-        payload.sortOrder = Number(form.sortOrder);
+      if (activeTab === 'Entities') {
+        payload = { name: form.name, is_active: form.isActive };
+      } else {
+        payload = { name: form.name, isActive: form.isActive };
+        if (activeTab === 'Cities') payload.stateId = Number(form.stateId);
+        if (activeTab === 'Meal Sizes') {
+          payload.displayName = form.displayName;
+          payload.sortOrder = Number(form.sortOrder);
+        }
       }
 
       if (editTarget) {
         if (activeTab === 'States') await adminMasterDataAPI.updateState(editTarget.id, payload);
         if (activeTab === 'Cities') await adminMasterDataAPI.updateCity(editTarget.id, payload);
         if (activeTab === 'Meal Sizes') await adminMasterDataAPI.updateMealSize(editTarget.id, payload);
+        if (activeTab === 'Entities') await adminEntitiesAPI.update(editTarget.id, payload);
         toast.success('Updated successfully');
       } else {
         if (activeTab === 'States') await adminMasterDataAPI.createState(payload);
         if (activeTab === 'Cities') await adminMasterDataAPI.createCity(payload);
         if (activeTab === 'Meal Sizes') await adminMasterDataAPI.createMealSize(payload);
+        if (activeTab === 'Entities') await adminEntitiesAPI.create(payload);
         toast.success('Created successfully');
       }
       setModalOpen(false);
@@ -113,6 +123,7 @@ function MasterData() {
       if (activeTab === 'States') await adminMasterDataAPI.deleteState(deleteTarget.id);
       if (activeTab === 'Cities') await adminMasterDataAPI.deleteCity(deleteTarget.id);
       if (activeTab === 'Meal Sizes') await adminMasterDataAPI.deleteMealSize(deleteTarget.id);
+      if (activeTab === 'Entities') await adminEntitiesAPI.delete(deleteTarget.id);
       toast.success('Deleted successfully');
       setDeleteTarget(null);
       fetchData();
@@ -136,7 +147,7 @@ function MasterData() {
           <p className="page-subtitle">Manage lookup values, states, cities, and companies</p>
         </div>
         {activeTab !== 'Standards' && (
-          <Button onClick={openCreate}>Add {activeTab.slice(0, -1)}</Button>
+          <Button onClick={openCreate}>Add {activeTab === 'Entities' ? 'Entity' : activeTab.slice(0, -1)}</Button>
         )}
       </div>
 
@@ -163,7 +174,12 @@ function MasterData() {
         <EmptyState title={`No ${activeTab}`} description={`No data available for ${activeTab}`} />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {data.map(item => (
+          {data.slice().sort((a, b) => {
+            if (a.is_active !== b.is_active) {
+              return a.is_active ? -1 : 1;
+            }
+            return 0;
+          }).map(item => (
             <div key={item.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <strong style={{ fontSize: 16 }}>{item.display_name || item.name}</strong>
@@ -192,7 +208,7 @@ function MasterData() {
       )}
 
       {/* Modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={`${editTarget ? 'Edit' : 'Add'} ${activeTab.slice(0, -1)}`} size="sm">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={`${editTarget ? 'Edit' : 'Add'} ${activeTab === 'Entities' ? 'Entity' : activeTab.slice(0, -1)}`} size="sm">
         <form onSubmit={handleSave}>
           <Input label={activeTab === 'Meal Sizes' ? 'Internal Name (Code)' : 'Name'} required {...f('name')} />
           

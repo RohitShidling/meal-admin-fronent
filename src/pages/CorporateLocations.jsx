@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { adminCorporateAPI, commonAPI } from '../services/api';
-import { Button, EmptyState, Spinner, Badge, ConfirmDialog } from '../components/FormElements';
+import { Button, EmptyState, Spinner, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
-const INITIAL_FORM = { name: '', address: '', city: '', state: '', is_active: true };
+const INITIAL_FORM = { name: '', address: '', city: '', state: '' };
 
 export default function CorporateLocations() {
   const [locations, setLocations] = useState([]);
@@ -18,7 +18,7 @@ export default function CorporateLocations() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [togglingId, setTogglingId] = useState(null);
+
 
   const [statesList, setStatesList] = useState([]);
   const [citiesList, setCitiesList] = useState([]);
@@ -39,7 +39,7 @@ export default function CorporateLocations() {
   const fetchLocations = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await commonAPI.getCorporateLocations();
+      const res = await adminCorporateAPI.getAll();
       setLocations(Array.isArray(res?.data) ? res.data : []);
     } catch (err) {
       toast.error(err.message || 'Failed to load locations');
@@ -58,7 +58,7 @@ export default function CorporateLocations() {
 
   const openEdit = (loc) => {
     setEditTarget(loc);
-    setForm({ name: loc.name || '', address: loc.address || '', city: loc.city || '', state: loc.state || '', is_active: loc.is_active ?? true });
+    setForm({ name: loc.name || '', address: loc.address || '', city: loc.city || '', state: loc.state || '' });
     
     // Attempt to find the state ID from the state name so cities can load
     const st = statesList.find(s => s.name === loc.state);
@@ -82,7 +82,7 @@ export default function CorporateLocations() {
     e.preventDefault();
     if (!validate()) return;
     setSaving(true);
-    const payload = { name: form.name, address: form.address, city: form.city, state: form.state, is_active: form.is_active };
+    const payload = { name: form.name, address: form.address, city: form.city, state: form.state };
     try {
       if (editTarget) {
         await adminCorporateAPI.update(editTarget.id, payload);
@@ -111,16 +111,7 @@ export default function CorporateLocations() {
     } finally { setDeleting(false); }
   };
 
-  const handleToggleStatus = async (loc) => {
-    setTogglingId(loc.id);
-    try {
-      await adminCorporateAPI.setStatus(loc.id, !loc.is_active);
-      toast.success(`Location ${loc.is_active ? 'deactivated' : 'activated'}`);
-      fetchLocations();
-    } catch (err) {
-      toast.error(err.message || 'Status update failed');
-    } finally { setTogglingId(null); }
-  };
+
 
   const f = (key) => ({ value: form[key], onChange: (e) => setForm((p) => ({ ...p, [key]: e.target.value })) });
 
@@ -158,7 +149,7 @@ export default function CorporateLocations() {
                   <th>Address</th>
                   <th>City</th>
                   <th>State</th>
-                  <th>Status</th>
+
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -174,22 +165,10 @@ export default function CorporateLocations() {
                     </td>
                     <td>{loc.city || '—'}</td>
                     <td>{loc.state || '—'}</td>
-                    <td>
-                      <Badge variant={loc.is_active ? 'success' : 'default'}>
-                        {loc.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </td>
+
                     <td>
                       <div className="action-btns">
-                        <button
-                          className="icon-btn"
-                          title={loc.is_active ? 'Deactivate' : 'Activate'}
-                          onClick={() => handleToggleStatus(loc)}
-                          disabled={togglingId === loc.id}
-                          id={`toggle-loc-${loc.id}`}
-                        >
-                          {loc.is_active ? <PauseIcon /> : <PlayIcon />}
-                        </button>
+
                         <button className="icon-btn" title="Edit" onClick={() => openEdit(loc)} id={`edit-loc-${loc.id}`}>
                           <EditIcon />
                         </button>
@@ -241,16 +220,7 @@ export default function CorporateLocations() {
               {citiesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </Select>
           </div>
-          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input
-              id="loc-active"
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
-              style={{ width: 16, height: 16, accentColor: 'var(--accent-primary)' }}
-            />
-            <label htmlFor="loc-active" style={{ fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer' }}>Active</label>
-          </div>
+
           <div className="form-actions" style={{ marginTop: 24 }}>
             <Button variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button type="submit" loading={saving} id="location-save-btn">
@@ -275,6 +245,5 @@ export default function CorporateLocations() {
 const PlusIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const EditIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const TrashIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
-const PauseIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>;
-const PlayIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+
 const PinSVG = () => <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;

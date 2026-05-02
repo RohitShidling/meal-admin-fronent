@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminHomepageAPI } from '../services/api';
+import { adminHomepageAPI, commonAPI } from '../services/api';
 import { Button, EmptyState, Spinner, Badge, ConfirmDialog } from '../components/FormElements';
-import { Input } from '../components/FormElements';
+import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
-const INITIAL_FORM = { name: '', description: '', display_order: '1', is_active: true };
+const INITIAL_FORM = { entity_id: '', name: '', description: '', display_order: '1', is_active: true };
 
 export default function Homepage() {
   const [sections, setSections] = useState([]);
+  const [entities, setEntities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('active');
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
@@ -22,7 +24,7 @@ export default function Homepage() {
   const fetchSections = useCallback(async () => {
     setLoading(true);
     try {
-      // Uses GET /api/common/homepage (public, no-auth read)
+      // Uses GET /api/admin/homepage (returns both active and inactive sections with entity_name)
       const res = await adminHomepageAPI.getAll();
       setSections(Array.isArray(res?.data) ? res.data : []);
     } catch (err) {
@@ -30,7 +32,19 @@ export default function Homepage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchSections(); }, [fetchSections]);
+  const fetchEntities = useCallback(async () => {
+    try {
+      const res = await commonAPI.getEntities();
+      setEntities(Array.isArray(res?.data) ? res.data : []);
+    } catch (err) {
+      toast.error('Failed to load entities');
+    }
+  }, []);
+
+  useEffect(() => { 
+    fetchSections(); 
+    fetchEntities();
+  }, [fetchSections, fetchEntities]);
 
   const openCreate = () => {
     setEditTarget(null);
@@ -42,6 +56,7 @@ export default function Homepage() {
   const openEdit = (section) => {
     setEditTarget(section);
     setForm({
+      entity_id: section.entity_id || '',
       name: section.name || '',
       description: section.description || '',
       display_order: section.display_order?.toString() || '1',
@@ -53,6 +68,7 @@ export default function Homepage() {
 
   const validate = () => {
     const e = {};
+    if (!form.entity_id.trim()) e.entity_id = 'Entity is required';
     if (!form.name.trim()) e.name = 'Section name is required';
     if (!form.description.trim()) e.description = 'Description is required';
     if (!form.display_order || isNaN(Number(form.display_order)) || Number(form.display_order) < 1)
@@ -66,6 +82,7 @@ export default function Homepage() {
     if (!validate()) return;
     setSaving(true);
     const payload = {
+      entity_id: form.entity_id.trim(),
       name: form.name.trim(),
       description: form.description.trim(),
       display_order: Number(form.display_order),
@@ -136,20 +153,43 @@ export default function Homepage() {
         </span>
       </div>
 
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+        {['active', 'inactive'].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 20,
+              cursor: 'pointer',
+              border: 'none',
+              background: activeTab === tab ? 'var(--accent-primary)' : 'transparent',
+              color: activeTab === tab ? '#fff' : 'var(--text-secondary)',
+              fontWeight: activeTab === tab ? 600 : 500,
+              textTransform: 'capitalize',
+            }}
+          >
+            {tab === 'active' ? 'Active' : 'Inactive'}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size="lg" /></div>
-      ) : sections.length === 0 ? (
+      ) : sections.filter(s => activeTab === 'active' ? s.is_active : !s.is_active).length === 0 ? (
         <div className="card">
           <EmptyState
             icon={<PageSVG />}
-            title="No homepage sections"
-            description="Create your first section to populate the public Buuttii homepage"
+            title={`No ${activeTab} sections`}
+            description={`Create your first ${activeTab} section to populate the public Buuttii homepage`}
             action={<Button onClick={openCreate} icon={<PlusIcon />}>Add Section</Button>}
           />
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {sections
+            .filter(s => activeTab === 'active' ? s.is_active : !s.is_active)
             .slice()
             .sort((a, b) => a.display_order - b.display_order)
             .map((section) => (
@@ -182,7 +222,10 @@ export default function Homepage() {
                       ID: {section.id}
                     </span>
                   </div>
-                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '6px 0 0 0' }}>
+                    Entity: <strong>{section.entity_name || 'N/A'}</strong>
+                  </p>
+                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '8px 0 0 0', lineHeight: 1.6 }}>
                     {section.description}
                   </p>
                 </div>
@@ -219,12 +262,42 @@ export default function Homepage() {
         size="md"
       >
         <form onSubmit={handleSave} id="homepage-section-form">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <Select
+              id="section-entity"
+              label="Entity"
+              error={errors.entity_id}
+              required
+              value={form.entity_id}
+              onChange={(e) => setForm((p) => ({ ...p, entity_id: e.target.value }))}
+            >
+              <option value="">Select Entity</option>
+              {entities.map((entity) => (
+                <option key={entity.id} value={entity.id}>
+                  {entity.name}
+                </option>
+              ))}
+            </Select>
+            <Input
+              id="section-display-order"
+              label="Display Order"
+              type="number"
+              min="1"
+              placeholder="1"
+              hint="Lower numbers appear first"
+              error={errors.display_order}
+              required
+              value={form.display_order}
+              onChange={(e) => setForm((p) => ({ ...p, display_order: e.target.value }))}
+            />
+          </div>
           <Input
             id="section-name"
             label="Section Name"
             placeholder="e.g. Welcome Banner"
             error={errors.name}
             required
+            style={{ marginTop: 16 }}
             {...f('name')}
           />
           <div style={{ marginTop: 16 }}>
@@ -240,19 +313,6 @@ export default function Homepage() {
               className={`form-input form-textarea${errors.description ? ' form-input-error' : ''}`}
             />
             {errors.description && <p className="form-error" style={{ marginTop: 4 }}>{errors.description}</p>}
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <Input
-              id="section-display-order"
-              label="Display Order"
-              type="number"
-              min="1"
-              placeholder="1"
-              hint="Lower numbers appear first. Each value must be unique."
-              error={errors.display_order}
-              required
-              {...f('display_order')}
-            />
           </div>
           <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
             <input

@@ -2,7 +2,17 @@ import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Input, Button } from '../components/FormElements';
+import { 
+  HiOutlineBuildingOffice2, 
+  HiOutlineTicket, 
+  HiOutlineChartBar, 
+  HiOutlineQueueList,
+  HiOutlinePhone,
+  HiArrowRight,
+  HiArrowLeft
+} from 'react-icons/hi2';
 import './Login.css';
+
 
 export default function LoginPage() {
   const { isAuthenticated, step, loading, sendOTP, verifyOTP, pendingPhone } = useAuth();
@@ -44,10 +54,10 @@ export default function LoginPage() {
         </div>
         <div className="login-features">
           {[
-            { icon: '🏫', label: 'School & Corporate Management' },
-            { icon: '📋', label: 'Subscription & Trial Plans' },
-            { icon: '📊', label: 'Real-time Analytics' },
-            { icon: '🍱', label: 'Daily Menu & Token System' },
+            { icon: <HiOutlineBuildingOffice2 />, label: 'School & Corporate Management' },
+            { icon: <HiOutlineTicket />, label: 'Subscription & Trial Plans' },
+            { icon: <HiOutlineChartBar />, label: 'Real-time Analytics' },
+            { icon: <HiOutlineQueueList />, label: 'Daily Menu & Token System' },
           ].map((f) => (
             <div key={f.label} className="login-feature-item">
               <span className="login-feature-icon">{f.icon}</span>
@@ -116,15 +126,13 @@ export default function LoginPage() {
                 loading={loading}
                 id="admin-login-submit"
               >
-                Continue →
+                Continue <HiArrowRight style={{ marginLeft: '8px' }} />
               </Button>
             </form>
           ) : (
             <form onSubmit={handleVerifyOTP} className="login-form" id="admin-otp-form">
               <div className="otp-info">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.76a16 16 0 0 0 6.34 6.34l1.56-1.56a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-                </svg>
+                <HiOutlinePhone className="otp-info-icon" />
                 <span>Enter the 6-digit OTP sent to your registered phone.</span>
               </div>
               <Input
@@ -156,7 +164,7 @@ export default function LoginPage() {
                 onClick={() => { setOtp(''); setError(''); }}
                 id="back-to-login"
               >
-                ← Back to login
+                <HiArrowLeft style={{ marginRight: '8px' }} /> Back to login
               </button>
             </form>
           )}

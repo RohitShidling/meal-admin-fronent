@@ -55,7 +55,10 @@ async function request(endpoint, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    if (res.status === 401 && !options._retry) {
+    // Only attempt refresh for 401s on non-auth endpoints
+    const isAuthEndpoint = endpoint.includes('/api/admin/auth/');
+    
+    if (res.status === 401 && !options._retry && !isAuthEndpoint) {
       try {
         const refreshRes = await fetch(`${BASE_URL}/api/admin/auth/refresh`, {
           method: 'POST',
@@ -68,9 +71,14 @@ async function request(endpoint, options = {}) {
           return request(endpoint, { ...options, _retry: true });
         }
       } catch {}
+      
+      // If refresh fails, clear and redirect
       TokenService.clear();
       window.location.href = '/login';
     }
+    
+    // For 401 on login/auth, or if refresh failed, we just throw the error
+    // so the caller (like AuthContext) can handle it.
     const error = new Error(data.message || `HTTP ${res.status}`);
     error.status = res.status;
     error.data = data;

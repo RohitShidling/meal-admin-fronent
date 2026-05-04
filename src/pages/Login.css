@@ -60,8 +60,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
   flex-shrink: 0;
+  color: var(--accent-primary);
+  transition: var(--transition);
+}
+
+.login-feature-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.login-feature-item:hover .login-feature-icon {
+  border-color: var(--accent-primary);
+  background: var(--accent-bg);
+  transform: translateY(-2px);
 }
 
 .login-panel-footer {
@@ -156,8 +168,11 @@
   font-weight: 500;
 }
 
-.otp-info svg {
+.otp-info-icon {
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
+  color: var(--accent-primary);
 }
 
 .back-link {
@@ -166,7 +181,9 @@
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 4px 0;
   transition: var(--transition);
   font-family: inherit;
@@ -174,6 +191,7 @@
 
 .back-link:hover {
   color: var(--accent-primary);
+  transform: translateX(-4px);
 }
 
 /* ── Responsive: collapse left panel on small screens ── */

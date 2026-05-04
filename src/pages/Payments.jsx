@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminPaymentAPI, commonAPI } from '../services/api';
+import { adminPaymentAPI, commonAPI, adminSchoolsAPI } from '../services/api';
 import { Spinner, EmptyState, Badge, Button } from '../components/FormElements';
 import { Input } from '../components/FormElements';
 import { toast } from '../components/Toast';
@@ -42,13 +42,14 @@ export default function Payments() {
       const [paymentsRes, statsRes, schoolsRes] = await Promise.all([
         adminPaymentAPI.getAll(filters),
         adminPaymentAPI.getStats(),
-        commonAPI.getSchools(),
+        adminSchoolsAPI.getAll({ limit: 100 }), // Fetch more to populate filter
+
       ]);
 
       setPayments(paymentsRes.data || []);
       setPagination(paymentsRes.pagination || { currentPage: 1, totalPages: 1 });
       setStats(statsRes.data || null);
-      setSchools(schoolsRes.data?.schools || []);
+      setSchools(schoolsRes.data?.schools || schoolsRes.data || []);
     } catch (err) {
       toast.error(err.message || 'Failed to load payment data');
     } finally {

@@ -14,6 +14,17 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [reducing, setReducing] = useState(false);
 
+  const todayMealSizeCounts = (() => {
+    const counts = { small: 0, medium: 0, large: 0 };
+    (kitchenReport?.meal_sizes || []).forEach((item) => {
+      const name = String(item.size || '').toLowerCase();
+      if (name.includes('small')) counts.small += Number(item.count || 0);
+      if (name.includes('medium')) counts.medium += Number(item.count || 0);
+      if (name.includes('large')) counts.large += Number(item.count || 0);
+    });
+    return counts;
+  })();
+
   const fetchData = async () => {
     try {
       const [dashRes, kitchenRes, analyticsRes, expiringRes] = await Promise.all([
@@ -216,11 +227,26 @@ export default function Dashboard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
         <div className="card">
-          <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Meal Sizes</h2>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {mealSizes.map((s) => (
-              <span key={s.id} className="badge">{s.display_name || s.name}</span>
-            ))}
+          <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Meals to Prepare Today</h2>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14 }}>Small</span>
+              <span style={{ fontWeight: 700, padding: '2px 10px', background: 'var(--accent-bg)', color: 'var(--accent-primary)', borderRadius: 12, fontSize: 13 }}>
+                {todayMealSizeCounts.small}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14 }}>Medium</span>
+              <span style={{ fontWeight: 700, padding: '2px 10px', background: 'var(--accent-bg)', color: 'var(--accent-primary)', borderRadius: 12, fontSize: 13 }}>
+                {todayMealSizeCounts.medium}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14 }}>Large</span>
+              <span style={{ fontWeight: 700, padding: '2px 10px', background: 'var(--accent-bg)', color: 'var(--accent-primary)', borderRadius: 12, fontSize: 13 }}>
+                {todayMealSizeCounts.large}
+              </span>
+            </div>
           </div>
         </div>
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminPaymentAPI, commonAPI } from '../services/api';
+import { adminPaymentAPI, adminSchoolsAPI } from '../services/api';
 import { Spinner, EmptyState, Badge, Button } from '../components/FormElements';
-import { Input } from '../components/FormElements';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
@@ -42,13 +41,17 @@ export default function Payments() {
       const [paymentsRes, statsRes, schoolsRes] = await Promise.all([
         adminPaymentAPI.getAll(filters),
         adminPaymentAPI.getStats(),
-        commonAPI.getSchools(),
+        adminSchoolsAPI.getAll({ limit: 100 }), // Fetch more to populate filter
+
       ]);
 
       setPayments(paymentsRes.data || []);
-      setPagination(paymentsRes.pagination || { currentPage: 1, totalPages: 1 });
+      setPagination({
+        currentPage: paymentsRes.pagination?.page || 1,
+        totalPages: paymentsRes.pagination?.totalPages || 1,
+      });
       setStats(statsRes.data || null);
-      setSchools(schoolsRes.data?.schools || []);
+      setSchools(schoolsRes.data?.schools || schoolsRes.data || []);
     } catch (err) {
       toast.error(err.message || 'Failed to load payment data');
     } finally {
@@ -224,6 +227,7 @@ export default function Payments() {
                   <th>Order ID</th>
                   <th>Date & Time</th>
                   <th>Customer Name</th>
+                  <th>Phone Number</th>
                   <th>Plan</th>
                   <th>Sector</th>
                   <th>Amount</th>
@@ -239,10 +243,15 @@ export default function Payments() {
                       <div style={{ fontWeight: 500 }}>{p.entity_name}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.school_name || p.corporate_location_name || '—'}</div>
                     </td>
+                    <td>{p.client_phone || '—'}</td>
                     <td>{p.subscription_name}</td>
                     <td><Badge variant="ghost">{ENTITY_LABELS[p.entity_type] || p.entity_type}</Badge></td>
                     <td style={{ fontWeight: 600 }}>{formatCurrency(p.amount)}</td>
-                    <td><Badge variant={STATUS_COLORS[p.status]}>{p.status}</Badge></td>
+                    <td>
+                      <Badge variant={STATUS_COLORS[p.order_status] || 'secondary'}>
+                        {p.order_status || 'unknown'}
+                      </Badge>
+                    </td>
                   </tr>
                 ))}
               </tbody>

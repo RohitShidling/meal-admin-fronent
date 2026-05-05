@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { adminMenuAPI, commonAPI } from '../services/api';
+import { adminMenuAPI, adminMenuNutritionAPI, commonAPI } from '../services/api';
 import { Button, EmptyState, Spinner, ConfirmDialog } from '../components/FormElements';
 import { Input } from '../components/FormElements';
 import Modal from '../components/Modal';
@@ -31,6 +31,7 @@ export default function Menu() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadDate, setUploadDate] = useState('');
   const [items, setItems] = useState('');
+  const [nutritionPoints, setNutritionPoints] = useState(['']);
   const [isActive, setIsActive] = useState(true);
   const [preview, setPreview] = useState('');
   const [saving, setSaving] = useState(false);
@@ -41,9 +42,31 @@ export default function Menu() {
   const fetchMenus = useCallback(async () => {
     setLoading(true);
     try {
-      // Response: { success, count, data: [{ id, image_url, items, menu_date, created_at }] }
-      const res = await commonAPI.getMenuHistory({ limit: 50 });
-      setMenus(Array.isArray(res?.data) ? res.data : []);
+      // Menus + nutrition are fetched separately and merged by date.
+      const [menuRes, nutritionRes] = await Promise.all([
+        commonAPI.getMenuHistory({ limit: 50 }),
+        adminMenuNutritionAPI.getHistory({ limit: 100 }),
+      ]);
+
+      const baseMenus = Array.isArray(menuRes?.data) ? menuRes.data : [];
+      const nutritionRows = Array.isArray(nutritionRes?.data) ? nutritionRes.data : [];
+
+      const nutritionByDate = nutritionRows.reduce((acc, row) => {
+        const key = getLocalYYYYMMDD(row?.menu_date || '');
+        if (!key) return acc;
+        acc[key] = Array.isArray(row?.nutrition_points) ? row.nutrition_points : [];
+        return acc;
+      }, {});
+
+      const mergedMenus = baseMenus.map((menu) => {
+        const dateKey = getLocalYYYYMMDD(menu?.menu_date || '');
+        return {
+          ...menu,
+          nutrition_points: nutritionByDate[dateKey] || [],
+        };
+      });
+
+      setMenus(mergedMenus);
     } catch (err) {
       toast.error(err.message || 'Failed to load menus');
     } finally { setLoading(false); }
@@ -56,6 +79,7 @@ export default function Menu() {
     setSelectedFile(null);
     setPreview('');
     setItems('');
+    setNutritionPoints(['']);
     setIsActive(true);
     setUploadDate(todayStr());
     setUploadOpen(true);
@@ -69,6 +93,15 @@ export default function Menu() {
     setIsActive(menu.is_active ?? true);
     setUploadDate(menu.menu_date ? getLocalYYYYMMDD(menu.menu_date) : todayStr());
     setUploadOpen(true);
+    const menuDate = menu.menu_date ? getLocalYYYYMMDD(menu.menu_date) : todayStr();
+    adminMenuNutritionAPI.getByDate(menuDate)
+      .then((res) => {
+        const points = Array.isArray(res?.data?.nutrition_points) ? res.data.nutrition_points : [];
+        setNutritionPoints(points.length ? points : ['']);
+      })
+      .catch(() => {
+        setNutritionPoints(['']);
+      });
   };
 
   const handleFileChange = (e) => {
@@ -102,11 +135,38 @@ export default function Menu() {
         await adminMenuAPI.upload(fd);
         toast.success('Menu uploaded');
       }
+
+      const cleanedNutrition = nutritionPoints.map((x) => String(x || '').trim()).filter(Boolean);
+      await adminMenuNutritionAPI.upsert({
+        menu_date: uploadDate,
+        nutrition_points: cleanedNutrition,
+      });
+
       setUploadOpen(false);
       fetchMenus();
     } catch (err) {
       toast.error(err.message || 'Operation failed');
     } finally { setSaving(false); }
+  };
+
+  const updateNutrition = (idx, value) => {
+    setNutritionPoints((prev) => {
+      const next = [...prev];
+      next[idx] = value;
+      return next;
+    });
+  };
+
+  const addNutrition = () => {
+    setNutritionPoints((prev) => [...prev, '']);
+  };
+
+  const removeNutrition = (idx) => {
+    setNutritionPoints((prev) => {
+      const next = [...prev];
+      next.splice(idx, 1);
+      return next.length ? next : [''];
+    });
   };
 
   const handleDelete = async () => {
@@ -169,6 +229,15 @@ export default function Menu() {
                   {formatDate(m.menu_date)}
                 </div>
                 {m.items && <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{m.items}</p>}
+                {Array.isArray(m.nutrition_points) && m.nutrition_points.length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {m.nutrition_points.slice(0, 3).map((point, idx) => (
+                      <div key={`${m.id}-nutri-${idx}`} style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        • {point}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <Button variant="secondary" size="sm" icon={<EditIcon />} onClick={() => openEdit(m)} id={`edit-menu-${m.id}`}>
                     Edit
@@ -250,6 +319,39 @@ export default function Menu() {
                 fontSize: 14, resize: 'vertical', outline: 'none', fontFamily: 'inherit',
               }}
             />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                Nutrition Details
+              </label>
+              <Button type="button" size="sm" variant="secondary" onClick={addNutrition}>
+                Add Nutrition
+              </Button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {nutritionPoints.map((point, idx) => (
+                <div key={`nutrition-${idx}`} style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    value={point}
+                    onChange={(e) => updateNutrition(idx, e.target.value)}
+                    placeholder={`Nutrition ${idx + 1} (e.g. Protein: 12g)`}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-input)',
+                      color: 'var(--text-primary)'
+                    }}
+                  />
+                  <Button type="button" size="sm" variant="ghost" onClick={() => removeNutrition(idx)}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
           {editTarget && (
             <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>

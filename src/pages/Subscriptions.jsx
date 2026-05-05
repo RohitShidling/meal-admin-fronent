@@ -12,6 +12,8 @@ const INITIAL_FORM = {
   plan_name: '',
   price: '',
   billing_cycle: 'monthly',
+  duration_days: '30',
+  features: [''],
   trial_days: '0',
   display_order: '1',
   is_active: true,
@@ -57,6 +59,8 @@ export default function Subscriptions() {
     setForm({
       ...INITIAL_FORM,
       billing_cycle: type === 'trial' ? 'daily' : 'monthly',
+      duration_days: type === 'trial' ? '7' : '30',
+      features: [''],
       trial_days: type === 'trial' ? '7' : '0'
     });
     setErrors({});
@@ -69,6 +73,8 @@ export default function Subscriptions() {
       plan_name: sub.plan_name || '',
       price: sub.price?.toString() || '',
       billing_cycle: sub.billing_cycle || (sub._type === 'trial' ? 'daily' : 'monthly'),
+      duration_days: sub.duration_days?.toString() || (sub._type === 'trial' ? (sub.trial_days?.toString() || '7') : '30'),
+      features: Array.isArray(sub.features) && sub.features.length > 0 ? sub.features : [''],
       trial_days: sub.trial_days?.toString() || (sub._type === 'trial' ? '7' : '0'),
       display_order: sub.display_order?.toString() || '1',
       is_active: sub.is_active ?? true,
@@ -84,7 +90,13 @@ export default function Subscriptions() {
     if (!form.plan_name.trim()) e.plan_name = 'Plan name is required';
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) < 0) e.price = 'Valid price required';
     if (!isTrial && !form.billing_cycle) e.billing_cycle = 'Billing cycle is required';
+    if (!isTrial && (!form.duration_days || !Number.isInteger(Number(form.duration_days)) || Number(form.duration_days) <= 0)) {
+      e.duration_days = 'Duration must be a positive whole number';
+    }
     if (isTrial && (!form.trial_days || Number(form.trial_days) <= 0)) e.trial_days = 'Trial duration must be at least 1 day';
+    if ((form.features || []).filter((x) => String(x || '').trim()).length === 0) {
+      e.features = 'Add at least one feature';
+    }
     
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -101,6 +113,8 @@ export default function Subscriptions() {
       plan_name: form.plan_name,
       price: Number(form.price),
       billing_cycle: isTrial ? 'daily' : form.billing_cycle,
+      duration_days: isTrial ? Number(form.trial_days) : Number(form.duration_days),
+      features: (form.features || []).map((x) => String(x || '').trim()).filter(Boolean),
       trial_days: isTrial ? Number(form.trial_days) : 0,
       display_order: Number(form.display_order) || 1,
       is_active: form.is_active,
@@ -142,6 +156,26 @@ export default function Subscriptions() {
     value: form[key],
     onChange: (e) => setForm((p) => ({ ...p, [key]: e.target.value })),
   });
+
+  const updateFeature = (idx, value) => {
+    setForm((prev) => {
+      const next = [...(prev.features || [])];
+      next[idx] = value;
+      return { ...prev, features: next };
+    });
+  };
+
+  const addFeature = () => {
+    setForm((prev) => ({ ...prev, features: [...(prev.features || []), ''] }));
+  };
+
+  const removeFeature = (idx) => {
+    setForm((prev) => {
+      const current = [...(prev.features || [])];
+      current.splice(idx, 1);
+      return { ...prev, features: current.length ? current : [''] };
+    });
+  };
 
   const cycleLabel = { daily: 'day', weekly: 'week', monthly: 'month', quarterly: 'quarter', yearly: 'year' };
 
@@ -200,10 +234,22 @@ export default function Subscriptions() {
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Badge variant="accent">{sub.billing_cycle}</Badge>
+                {(Number(sub.duration_days || sub.trial_days || 0) > 0) && (
+                  <Badge variant="ghost">{Number(sub.duration_days || sub.trial_days || 0)} days</Badge>
+                )}
                 {sub.trial_days > 0 && (
                   <Badge variant="info">{sub.trial_days} day trial</Badge>
                 )}
               </div>
+              {Array.isArray(sub.features) && sub.features.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {sub.features.slice(0, 3).map((feature, idx) => (
+                    <div key={`${sub.id}-feature-${idx}`} style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      • {feature}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
                 <Button variant="secondary" size="sm" icon={<EditIcon />} onClick={() => openEdit(sub)} id={`edit-sub-${sub.id}`}>Edit</Button>
@@ -256,6 +302,53 @@ export default function Subscriptions() {
                 <option value="quarterly">Quarterly</option>
                 <option value="yearly">Yearly</option>
               </Select>
+            )}
+          </div>
+
+          {editTarget?._type !== 'trial' && (
+            <div style={{ marginTop: 16 }}>
+              <Input
+                id="sub-duration-days"
+                label="Plan Duration (Days)"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="30"
+                error={errors.duration_days}
+                required
+                {...f('duration_days')}
+              />
+            </div>
+          )}
+
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Plan Features</label>
+              <Button type="button" size="sm" variant="secondary" onClick={addFeature}>Add Feature</Button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(form.features || []).map((feature, idx) => (
+                <div key={`feature-${idx}`} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={feature}
+                    onChange={(e) => updateFeature(idx, e.target.value)}
+                    placeholder={`Feature ${idx + 1}`}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-input)',
+                      color: 'var(--text-primary)'
+                    }}
+                  />
+                  <Button type="button" size="sm" variant="ghost" onClick={() => removeFeature(idx)}>Remove</Button>
+                </div>
+              ))}
+            </div>
+            {errors.features && (
+              <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>{errors.features}</div>
             )}
           </div>
           

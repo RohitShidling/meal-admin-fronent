@@ -11,6 +11,7 @@ import Payments from './pages/Payments';
 import TrialPlans from './pages/TrialPlans';
 import MasterData from './pages/MasterData';
 import Homepage from './pages/Homepage';
+import TokenPage from './pages/Token';
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/payments" element={<Payments />} />
             <Route path="/trial-plans" element={<TrialPlans />} />
             <Route path="/master-data" element={<MasterData />} />
+            <Route path="/token" element={<TokenPage />} />
             <Route path="/homepage" element={<Homepage />} />
           </Route>
 

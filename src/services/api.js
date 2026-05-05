@@ -92,6 +92,29 @@ async function request(endpoint, options = {}) {
   return data;
 }
 
+async function requestBlob(endpoint, options = {}) {
+  const token = TokenService.getAccessToken();
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+
+  const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const error = new Error(data.message || `HTTP ${res.status}`);
+    error.status = res.status;
+    error.data = data;
+    throw error;
+  }
+
+  return {
+    blob: await res.blob(),
+    headers: res.headers,
+  };
+}
+
 // ─── Admin Auth APIs ──────────────────────────────────────────────────────────
 // POST /api/admin/auth/login        Body: { phoneNumber, password }
 // POST /api/admin/auth/verify-otp   Body: { phoneNumber, code }
@@ -192,6 +215,52 @@ export const adminSubscriptionsAPI = {
   delete: (id) => request(`/api/admin/subscriptions/${id}`, { method: 'DELETE' }),
   cancelClientSubscription: (subscriptionId) =>
     request(`/api/admin/subscriptions/client-subscription/${subscriptionId}`, { method: 'DELETE' }),
+};
+
+function tokenDateQuery(date) {
+  const d = date != null && String(date).trim() !== '' ? String(date).trim() : '';
+  return d ? `?${new URLSearchParams({ date: d }).toString()}` : '';
+}
+
+function encodeRequiredId(value, name) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    throw new Error(`${name} is required`);
+  }
+  return encodeURIComponent(String(value).trim());
+}
+
+function encodeMealSizeId(value) {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error('mealSizeId must be numeric');
+  }
+  return encodeURIComponent(normalized);
+}
+
+export const adminTokenAPI = {
+  getSchools: (date) => request(`/api/admin/tokens/schools${tokenDateQuery(date)}`),
+  getSchoolsPanel: (date) => request(`/api/admin/tokens/schools/panel${tokenDateQuery(date)}`),
+  downloadSchoolPdf: (schoolId, date) =>
+    requestBlob(`/api/admin/tokens/schools/${encodeRequiredId(schoolId, 'schoolId')}/pdf${tokenDateQuery(date)}`),
+  getSchoolMealSize: (schoolId, mealSizeId, date, includeTokens = false) =>
+    request(`/api/admin/tokens/schools/${encodeRequiredId(schoolId, 'schoolId')}/meal-sizes/${encodeMealSizeId(mealSizeId)}${tokenDateQuery(date)}${includeTokens ? `${tokenDateQuery(date) ? '&' : '?'}includeTokens=true` : ''}`),
+  downloadSchoolMealSizePdf: (schoolId, mealSizeId, date) =>
+    requestBlob(`/api/admin/tokens/schools/${encodeRequiredId(schoolId, 'schoolId')}/meal-sizes/${encodeMealSizeId(mealSizeId)}/pdf${tokenDateQuery(date)}`),
+
+  getCorporate: (date) => request(`/api/admin/tokens/corporate${tokenDateQuery(date)}`),
+  getCorporateLocation: (locationId, date) =>
+    request(`/api/admin/tokens/corporate/${encodeRequiredId(locationId, 'locationId')}${tokenDateQuery(date)}`),
+  downloadCorporatePdf: (locationId, date) =>
+    requestBlob(`/api/admin/tokens/corporate/${encodeRequiredId(locationId, 'locationId')}/pdf${tokenDateQuery(date)}`),
+  exportSchoolsPdf: (date) => requestBlob(`/api/admin/tokens/export/schools/pdf${tokenDateQuery(date)}`),
+  exportCorporatePdf: (date) => requestBlob(`/api/admin/tokens/export/corporate/pdf${tokenDateQuery(date)}`),
+  exportAllPdf: (date) => requestBlob(`/api/admin/tokens/export/all/pdf${tokenDateQuery(date)}`),
+
+  getSkipPolicy: () => request('/api/admin/tokens/skip-policy'),
+  updateSkipPolicy: (data) => request('/api/admin/tokens/skip-policy', { method: 'PUT', body: data }),
+
+  addExtraMeals: (subscriptionId, data) =>
+    request(`/api/admin/tokens/subscriptions/${subscriptionId}/extra-meals`, { method: 'POST', body: data }),
 };
 
 export const adminTrialPlansAPI = {

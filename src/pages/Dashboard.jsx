@@ -216,11 +216,19 @@ export default function Dashboard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
         <div className="card">
-          <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Meal Sizes</h2>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {mealSizes.map((s) => (
-              <span key={s.id} className="badge">{s.display_name || s.name}</span>
+          <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Meals to Prepare Today</h2>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {(kitchenReport?.meal_sizes || []).map((sz) => (
+              <div key={sz.size} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 14 }}>{sz.size}</span>
+                <span style={{ fontWeight: 700, padding: '2px 10px', background: 'var(--accent-bg)', color: 'var(--accent-primary)', borderRadius: 12, fontSize: 13 }}>
+                  {sz.count}
+                </span>
+              </div>
             ))}
+            {(!kitchenReport?.meal_sizes || kitchenReport.meal_sizes.length === 0) && (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No active meal sizes for today.</div>
+            )}
           </div>
         </div>
 
@@ -249,5 +257,9 @@ function PinIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
 }
 function RevenueIcon() {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
+  return (
+    <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>
+      ₹
+    </span>
+  );
 }

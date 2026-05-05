@@ -208,10 +208,10 @@ export const adminSchoolsAPI = {
 // Response POST/PUT: { data: {} } (flat row)
 // Response DELETE: { data: { id } }
 export const adminSubscriptionsAPI = {
-  getAll: () => request('/api/admin/subscriptions'),
-  getById: (id) => request(`/api/admin/subscriptions/${id}`),
-  create: (data) => request('/api/admin/subscriptions', { method: 'POST', body: data }),
-  update: (id, data) => request(`/api/admin/subscriptions/${id}`, { method: 'PUT', body: data }),
+  getAll: () => request('/api/admin/subscription-plan-days'),
+  getById: (id) => request(`/api/admin/subscription-plan-days/${id}`),
+  create: (data) => request('/api/admin/subscription-plan-days', { method: 'POST', body: data }),
+  update: (id, data) => request(`/api/admin/subscription-plan-days/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/api/admin/subscriptions/${id}`, { method: 'DELETE' }),
   cancelClientSubscription: (subscriptionId) =>
     request(`/api/admin/subscriptions/client-subscription/${subscriptionId}`, { method: 'DELETE' }),
@@ -264,12 +264,12 @@ export const adminTokenAPI = {
 };
 
 export const adminTrialPlansAPI = {
-  getAll: () => request('/api/admin/trial-plans'),
-  getById: (id) => request(`/api/admin/trial-plans/${id}`),
-  create: (data) => request('/api/admin/trial-plans', { method: 'POST', body: data }),
-  update: (id, data) => request(`/api/admin/trial-plans/${id}`, { method: 'PUT', body: data }),
-  setStatus: (id, isActive) => request(`/api/admin/trial-plans/${id}/status`, { method: 'PATCH', body: { isActive } }),
-  delete: (id) => request(`/api/admin/trial-plans/${id}`, { method: 'DELETE' }),
+  getAll: () => request('/api/admin/trial-plan-features'),
+  getById: (id) => request(`/api/admin/trial-plan-features/${id}`),
+  create: (data) => request('/api/admin/trial-plan-features', { method: 'POST', body: data }),
+  update: (id, data) => request(`/api/admin/trial-plan-features/${id}`, { method: 'PUT', body: data }),
+  setStatus: (id, isActive) => request(`/api/admin/trial-plan-features/${id}/status`, { method: 'PATCH', body: { is_active: isActive } }),
+  delete: (id) => request(`/api/admin/trial-plan-features/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Admin Menu APIs ──────────────────────────────────────────────────────────
@@ -284,6 +284,15 @@ export const adminMenuAPI = {
     request(`/api/admin/menu/${date}`, { method: 'PUT', body: formData }),
   delete: (date) =>
     request(`/api/admin/menu/${date}`, { method: 'DELETE' }),
+};
+
+export const adminMenuNutritionAPI = {
+  upsert: (data) => request('/api/admin/menu-nutrition', { method: 'POST', body: data }),
+  getByDate: (date) => request(`/api/admin/menu-nutrition/${date}`),
+  getHistory: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/menu-nutrition/history/all${q ? `?${q}` : ''}`);
+  },
 };
 
 // ─── Admin Meals APIs ────────────────────────────────────────────────────────
@@ -399,8 +408,8 @@ export const commonAPI = {
   getCities: (stateId) => request(`/api/common/lookup/cities${stateId ? `?stateId=${stateId}` : ''}`),
   getEntities: () => request('/api/admin/entities'),
   getCorporateLocations: () => request('/api/common/corporate-locations'),
-  getSubscriptions: () => request('/api/common/subscriptions'),
-  getSubscriptionById: (id) => request(`/api/common/subscriptions/${id}`),
+  getSubscriptions: () => request('/api/common/subscription-plan-days'),
+  getSubscriptionById: (id) => request(`/api/common/subscription-plan-days/${id}`),
   getMenuHistory: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return request(`/api/common/menu/history/all${q ? `?${q}` : ''}`);

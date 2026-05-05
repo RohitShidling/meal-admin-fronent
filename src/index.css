@@ -45,6 +45,41 @@
   --transition-slow: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+:root[data-theme='dark'] {
+  --bg-primary: #0f1115;
+  --bg-secondary: #151923;
+  --bg-card: #1a1f2b;
+  --bg-hover: #202737;
+  --bg-input: #111827;
+
+  --border: #2a3243;
+  --border-focus: #ff6a33;
+  --border-subtle: #222b3a;
+
+  --text-primary: #f5f7fb;
+  --text-secondary: #c7d0dd;
+  --text-muted: #8e9bb0;
+  --text-accent: #ff6a33;
+
+  --accent-primary: #ff6a33;
+  --accent-hover: #ff7f52;
+  --accent-glow: rgba(255, 106, 51, 0.2);
+  --accent-bg: rgba(255, 106, 51, 0.12);
+
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.14);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.14);
+  --info: #38bdf8;
+  --info-bg: rgba(56, 189, 248, 0.14);
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.22);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.32);
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;

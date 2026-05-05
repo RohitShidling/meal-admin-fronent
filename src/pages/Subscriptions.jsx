@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminSubscriptionsAPI, adminTrialPlansAPI } from '../services/api';
+import { adminSubscriptionsAPI, adminTrialPlansAPI, commonAPI } from '../services/api';
 import { Button, EmptyState, Spinner, Badge, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
@@ -9,8 +9,8 @@ import '../components/Layout.css';
 // Backend fields: plan_name*, price*, billing_cycle*, trial_days, display_order, is_active
 // billing_cycle values: daily | weekly | monthly | quarterly | yearly
 const INITIAL_FORM = {
-  plan_name: '',
-  price: '',
+  price_with_saturday: '',
+  price_without_saturday: '',
   billing_cycle: 'monthly',
   duration_days: '30',
   features: [''],
@@ -29,6 +29,7 @@ export default function Subscriptions() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [mealSizes, setMealSizes] = useState([]);
 
   const fetchSubscriptions = useCallback(async () => {
     setLoading(true);
@@ -47,6 +48,8 @@ export default function Subscriptions() {
       
       const combined = [...regularSubs, ...trialSubs].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
       setSubscriptions(combined);
+      const mealSizesRes = await commonAPI.getMealSizes().catch(() => ({ data: { mealSizes: [] } }));
+      setMealSizes(Array.isArray(mealSizesRes?.data?.mealSizes) ? mealSizesRes.data.mealSizes : []);
     } catch (err) {
       toast.error('Failed to load plans');
     } finally { setLoading(false); }
@@ -71,11 +74,13 @@ export default function Subscriptions() {
     setEditTarget(sub);
     setForm({
       plan_name: sub.plan_name || '',
-      price: sub.price?.toString() || '',
+      price_with_saturday: (sub.price_with_saturday ?? sub.price)?.toString() || '',
+      price_without_saturday: (sub.price_without_saturday ?? sub.price)?.toString() || '',
       billing_cycle: sub.billing_cycle || (sub._type === 'trial' ? 'daily' : 'monthly'),
       duration_days: sub.duration_days?.toString() || (sub._type === 'trial' ? (sub.trial_days?.toString() || '7') : '30'),
       features: Array.isArray(sub.features) && sub.features.length > 0 ? sub.features : [''],
       trial_days: sub.trial_days?.toString() || (sub._type === 'trial' ? '7' : '0'),
+      meal_size_id: sub.meal_size_id?.toString() || '',
       display_order: sub.display_order?.toString() || '1',
       is_active: sub.is_active ?? true,
     });
@@ -87,8 +92,13 @@ export default function Subscriptions() {
     const e = {};
     const isTrial = editTarget?._type === 'trial';
     
-    if (!form.plan_name.trim()) e.plan_name = 'Plan name is required';
-    if (!form.price || isNaN(Number(form.price)) || Number(form.price) < 0) e.price = 'Valid price required';
+    if (!form.meal_size_id) e.meal_size_id = 'Meal size is required';
+    if (!form.price_with_saturday || isNaN(Number(form.price_with_saturday)) || Number(form.price_with_saturday) < 0) {
+      e.price_with_saturday = 'Valid price required';
+    }
+    if (!form.price_without_saturday || isNaN(Number(form.price_without_saturday)) || Number(form.price_without_saturday) < 0) {
+      e.price_without_saturday = 'Valid price required';
+    }
     if (!isTrial && !form.billing_cycle) e.billing_cycle = 'Billing cycle is required';
     if (!isTrial && (!form.duration_days || !Number.isInteger(Number(form.duration_days)) || Number(form.duration_days) <= 0)) {
       e.duration_days = 'Duration must be a positive whole number';
@@ -108,14 +118,20 @@ export default function Subscriptions() {
     setSaving(true);
     
     const isTrial = editTarget?._type === 'trial';
+    const selectedMealSizeName = mealSizes.find((m) => Number(m.id) === Number(form.meal_size_id))?.display_name
+      || mealSizes.find((m) => Number(m.id) === Number(form.meal_size_id))?.name
+      || '';
     
     const payload = {
-      plan_name: form.plan_name,
-      price: Number(form.price),
+      plan_name: selectedMealSizeName,
+      price_with_saturday: Number(form.price_with_saturday),
+      price_without_saturday: Number(form.price_without_saturday),
+      price: Number(form.price_with_saturday),
       billing_cycle: isTrial ? 'daily' : form.billing_cycle,
       duration_days: isTrial ? Number(form.trial_days) : Number(form.duration_days),
       features: (form.features || []).map((x) => String(x || '').trim()).filter(Boolean),
       trial_days: isTrial ? Number(form.trial_days) : 0,
+      meal_size_id: Number(form.meal_size_id),
       display_order: Number(form.display_order) || 1,
       is_active: form.is_active,
     };
@@ -215,7 +231,9 @@ export default function Subscriptions() {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700 }}>{sub.plan_name}</h3>
+                    <h3 style={{ fontSize: 16, fontWeight: 700 }}>
+                      {mealSizes.find(m => Number(m.id) === Number(sub.meal_size_id))?.display_name || sub.plan_name}
+                    </h3>
                     {sub._type === 'trial' && <Badge variant="warning">TRIAL PLAN</Badge>}
                   </div>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Order #{sub.display_order}</p>
@@ -223,17 +241,51 @@ export default function Subscriptions() {
                 <Badge variant={sub.is_active ? 'success' : 'default'}>{sub.is_active ? 'Active' : 'Inactive'}</Badge>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span style={{ fontSize: 30, fontWeight: 800, color: 'var(--accent-primary)' }}>
-                  ₹{Number(sub.price).toLocaleString('en-IN')}
-                </span>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                  / {cycleLabel[sub.billing_cycle] || sub.billing_cycle}
-                </span>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 14,
+                  marginTop: 2,
+                }}
+              >
+                <div
+                  style={{
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 10,
+                    padding: '10px 12px',
+                    background: 'var(--bg-subtle)',
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
+                    With Saturday
+                  </div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent-primary)' }}>
+                    ₹{Number(sub.price_with_saturday ?? sub.price).toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 10,
+                    padding: '10px 12px',
+                    background: 'var(--bg-subtle)',
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
+                    Without Saturday
+                  </div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent-primary)' }}>
+                    ₹{Number(sub.price_without_saturday ?? sub.price).toLocaleString('en-IN')}
+                  </div>
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Badge variant="accent">{sub.billing_cycle}</Badge>
+                <Badge variant="secondary">
+                  {mealSizes.find(m => Number(m.id) === Number(sub.meal_size_id))?.display_name || 'No Size'}
+                </Badge>
                 {(Number(sub.duration_days || sub.trial_days || 0) > 0) && (
                   <Badge variant="ghost">{Number(sub.duration_days || sub.trial_days || 0)} days</Badge>
                 )}
@@ -263,26 +315,31 @@ export default function Subscriptions() {
       {/* Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={(editTarget && editTarget.id ? 'Edit ' : 'New ') + (editTarget?._type === 'trial' ? 'Trial Plan' : 'Subscription Plan')} size="md">
         <form onSubmit={handleSave} id="subscription-form">
-          <Input
-            id="sub-plan-name"
-            label="Plan Name"
-            placeholder={editTarget?._type === 'trial' ? "e.g. 7-Day Demo" : "e.g. Monthly Lunch Plan"}
-            error={errors.plan_name}
-            required
-            {...f('plan_name')}
-          />
           <div className="form-row form-row-2" style={{ marginTop: 16 }}>
             <Input
-              id="sub-price"
-              label="Price (₹)"
+              id="sub-price-with-sat"
+              label="Price With Saturday (₹)"
               type="number"
               min="0"
               step="0.01"
               placeholder="499"
-              error={errors.price}
+              error={errors.price_with_saturday}
               required
-              {...f('price')}
+              {...f('price_with_saturday')}
             />
+            <Input
+              id="sub-price-without-sat"
+              label="Price Without Saturday (₹)"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="449"
+              error={errors.price_without_saturday}
+              required
+              {...f('price_without_saturday')}
+            />
+          </div>
+          <div className="form-row form-row-2" style={{ marginTop: 16 }}>
             {editTarget?._type === 'trial' ? (
               <Input
                 id="sub-trial-days"
@@ -303,6 +360,16 @@ export default function Subscriptions() {
                 <option value="yearly">Yearly</option>
               </Select>
             )}
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <Select id="sub-meal-size" label="Meal Size" error={errors.meal_size_id} required {...f('meal_size_id')}>
+              <option value="">Select meal size</option>
+              {mealSizes.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.display_name || m.name}
+                </option>
+              ))}
+            </Select>
           </div>
 
           {editTarget?._type !== 'trial' && (

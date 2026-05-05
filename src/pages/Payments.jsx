@@ -15,6 +15,7 @@ const ENTITY_LABELS = {
   child: 'Student',
   teacher: 'Teacher',
   professional: 'Professional',
+  cart: 'Cart',
 };
 
 export default function Payments() {
@@ -245,7 +246,7 @@ export default function Payments() {
                     </td>
                     <td>{p.client_phone || '—'}</td>
                     <td>{p.subscription_name}</td>
-                    <td><Badge variant="ghost">{ENTITY_LABELS[p.entity_type] || p.entity_type}</Badge></td>
+                    <td><Badge variant="ghost">{p.sector_label || ENTITY_LABELS[p.entity_type] || p.entity_type}</Badge></td>
                     <td style={{ fontWeight: 600 }}>{formatCurrency(p.amount)}</td>
                     <td>
                       <Badge variant={STATUS_COLORS[p.order_status] || 'secondary'}>

@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
-const INITIAL_FORM = { name: '', address: '', city: '', state: '' };
+const INITIAL_FORM = { name: '', address: '', city: '', state: '', is_active: true };
 
 export default function CorporateLocations() {
   const [locations, setLocations] = useState([]);
@@ -18,6 +18,7 @@ export default function CorporateLocations() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
 
 
   const [statesList, setStatesList] = useState([]);
@@ -58,7 +59,13 @@ export default function CorporateLocations() {
 
   const openEdit = (loc) => {
     setEditTarget(loc);
-    setForm({ name: loc.name || '', address: loc.address || '', city: loc.city || '', state: loc.state || '' });
+    setForm({
+      name: loc.name || '',
+      address: loc.address || '',
+      city: loc.city || '',
+      state: loc.state || '',
+      is_active: loc.is_active ?? true,
+    });
     
     // Attempt to find the state ID from the state name so cities can load
     const st = statesList.find(s => s.name === loc.state);
@@ -82,7 +89,13 @@ export default function CorporateLocations() {
     e.preventDefault();
     if (!validate()) return;
     setSaving(true);
-    const payload = { name: form.name, address: form.address, city: form.city, state: form.state };
+    const payload = {
+      name: form.name,
+      address: form.address,
+      city: form.city,
+      state: form.state,
+      is_active: form.is_active,
+    };
     try {
       if (editTarget) {
         await adminCorporateAPI.update(editTarget.id, payload);
@@ -96,6 +109,19 @@ export default function CorporateLocations() {
     } catch (err) {
       toast.error(err.message || 'Operation failed');
     } finally { setSaving(false); }
+  };
+
+  const handleToggleStatus = async (loc) => {
+    setStatusUpdatingId(loc.id);
+    try {
+      await adminCorporateAPI.setStatus(loc.id, !loc.is_active);
+      toast.success(`Location ${!loc.is_active ? 'activated' : 'deactivated'}`);
+      fetchLocations();
+    } catch (err) {
+      toast.error(err.message || 'Failed to update status');
+    } finally {
+      setStatusUpdatingId(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -149,7 +175,7 @@ export default function CorporateLocations() {
                   <th>Address</th>
                   <th>City</th>
                   <th>State</th>
-
+                  <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -165,10 +191,29 @@ export default function CorporateLocations() {
                     </td>
                     <td>{loc.city || '—'}</td>
                     <td>{loc.state || '—'}</td>
-
+                    <td>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: '2px 8px',
+                          borderRadius: 10,
+                          background: loc.is_active ? '#dcfce7' : '#f1f5f9',
+                          color: loc.is_active ? '#166534' : '#475569'
+                        }}
+                      >
+                        {loc.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
                     <td>
                       <div className="action-btns">
-
+                        <button
+                          className="icon-btn"
+                          title={loc.is_active ? 'Set Inactive' : 'Set Active'}
+                          onClick={() => handleToggleStatus(loc)}
+                          disabled={statusUpdatingId === loc.id}
+                        >
+                          {statusUpdatingId === loc.id ? '...' : (loc.is_active ? 'Off' : 'On')}
+                        </button>
                         <button className="icon-btn" title="Edit" onClick={() => openEdit(loc)} id={`edit-loc-${loc.id}`}>
                           <EditIcon />
                         </button>
@@ -219,6 +264,16 @@ export default function CorporateLocations() {
               <option value="">Select City</option>
               {citiesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </Select>
+          </div>
+          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              id="loc-active"
+              type="checkbox"
+              checked={!!form.is_active}
+              onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+              style={{ width: 16, height: 16 }}
+            />
+            <label htmlFor="loc-active" style={{ fontSize: 14 }}>Active</label>
           </div>
 
           <div className="form-actions" style={{ marginTop: 24 }}>

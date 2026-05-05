@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-<<<<<<< HEAD
 import { adminSubscriptionsAPI, adminTrialPlansAPI, adminTokenAPI } from '../services/api';
-=======
 import { adminSubscriptionsAPI, adminTrialPlansAPI, commonAPI } from '../services/api';
->>>>>>> 77209c9e378dd6ed72854b6a0eec0e3c286d669f
 import { Button, EmptyState, Spinner, Badge, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
@@ -33,13 +30,10 @@ export default function Subscriptions() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
-<<<<<<< HEAD
   const [extraModalOpen, setExtraModalOpen] = useState(false);
   const [extraSaving, setExtraSaving] = useState(false);
   const [extraForm, setExtraForm] = useState({ subscriptionId: '', extraMeals: '', reason: '' });
-=======
   const [mealSizes, setMealSizes] = useState([]);
->>>>>>> 77209c9e378dd6ed72854b6a0eec0e3c286d669f
 
   const fetchSubscriptions = useCallback(async () => {
     setLoading(true);

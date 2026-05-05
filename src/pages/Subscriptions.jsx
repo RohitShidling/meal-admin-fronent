@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminSubscriptionsAPI, adminTrialPlansAPI, commonAPI } from '../services/api';
+import { adminSubscriptionsAPI, adminTrialPlansAPI, adminTokenAPI, commonAPI } from '../services/api';
+// import { adminSubscriptionsAPI, adminTrialPlansAPI, commonAPI } from '../services/api';
 import { Button, EmptyState, Spinner, Badge, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
@@ -29,6 +30,9 @@ export default function Subscriptions() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [extraModalOpen, setExtraModalOpen] = useState(false);
+  const [extraSaving, setExtraSaving] = useState(false);
+  const [extraForm, setExtraForm] = useState({ subscriptionId: '', extraMeals: '', reason: '' });
   const [mealSizes, setMealSizes] = useState([]);
 
   const fetchSubscriptions = useCallback(async () => {
@@ -195,6 +199,42 @@ export default function Subscriptions() {
 
   const cycleLabel = { daily: 'day', weekly: 'week', monthly: 'month', quarterly: 'quarter', yearly: 'year' };
 
+  const openExtraMeals = (sub) => {
+    setExtraForm({
+      subscriptionId: String(sub.id || ''),
+      extraMeals: '',
+      reason: '',
+    });
+    setExtraModalOpen(true);
+  };
+
+  const handleExtraMealsSave = async (e) => {
+    e.preventDefault();
+    if (!extraForm.subscriptionId || !extraForm.extraMeals) {
+      toast.error('Subscription ID and extra meals are required');
+      return;
+    }
+    if (Number(extraForm.extraMeals) <= 0) {
+      toast.error('Extra meals must be greater than 0');
+      return;
+    }
+
+    setExtraSaving(true);
+    try {
+      await adminTokenAPI.addExtraMeals(extraForm.subscriptionId, {
+        extraMeals: Number(extraForm.extraMeals),
+        reason: extraForm.reason?.trim() || undefined,
+      });
+      toast.success('Extra meals added successfully');
+      setExtraModalOpen(false);
+      fetchSubscriptions();
+    } catch (err) {
+      toast.error(err.message || 'Failed to add extra meals');
+    } finally {
+      setExtraSaving(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -305,6 +345,7 @@ export default function Subscriptions() {
 
               <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
                 <Button variant="secondary" size="sm" icon={<EditIcon />} onClick={() => openEdit(sub)} id={`edit-sub-${sub.id}`}>Edit</Button>
+                <Button variant="ghost" size="sm" onClick={() => openExtraMeals(sub)} id={`extra-sub-${sub.id}`}>Add Extra Meals</Button>
                 <Button variant="ghost" size="sm" icon={<TrashIcon />} onClick={() => setDeleteTarget(sub)} id={`delete-sub-${sub.id}`} style={{ color: 'var(--danger)' }}>Delete</Button>
               </div>
             </div>
@@ -458,6 +499,37 @@ export default function Subscriptions() {
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
       />
+
+      <Modal isOpen={extraModalOpen} onClose={() => setExtraModalOpen(false)} title="Add Extra Meals" size="sm">
+        <form onSubmit={handleExtraMealsSave}>
+          <Input
+            label="Subscription ID"
+            value={extraForm.subscriptionId}
+            onChange={(e) => setExtraForm((p) => ({ ...p, subscriptionId: e.target.value }))}
+            required
+          />
+          <Input
+            label="Extra Meals"
+            type="number"
+            min="1"
+            value={extraForm.extraMeals}
+            onChange={(e) => setExtraForm((p) => ({ ...p, extraMeals: e.target.value }))}
+            required
+            style={{ marginTop: 12 }}
+          />
+          <Input
+            label="Reason"
+            value={extraForm.reason}
+            onChange={(e) => setExtraForm((p) => ({ ...p, reason: e.target.value }))}
+            placeholder="Optional reason"
+            style={{ marginTop: 12 }}
+          />
+          <div className="form-actions" style={{ marginTop: 24 }}>
+            <Button variant="ghost" type="button" onClick={() => setExtraModalOpen(false)}>Cancel</Button>
+            <Button type="submit" loading={extraSaving}>Submit</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

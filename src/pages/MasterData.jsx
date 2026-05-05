@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { adminMasterDataAPI, adminEntitiesAPI, commonAPI } from '../services/api';
+import { adminMasterDataAPI, adminEntitiesAPI, commonAPI, adminTokenAPI } from '../services/api';
 import { Button, EmptyState, Spinner, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
-const TABS = ['States', 'Cities', 'Meal Sizes', 'Standards', 'Entities'];
+const TABS = ['States', 'Cities', 'Meal Sizes', 'Standards', 'Entities', 'Meal Skip Policy'];
 
 function MasterData() {
   const [activeTab, setActiveTab] = useState('States');
@@ -19,6 +19,9 @@ function MasterData() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [skipPolicy, setSkipPolicy] = useState({ minSkipDays: '', minNoticeDays: '' });
 
   // Parent dependencies for dropdowns
   const [statesList, setStatesList] = useState([]);
@@ -42,9 +45,20 @@ function MasterData() {
       } else if (activeTab === 'Entities') {
         const res = await adminEntitiesAPI.getAll();
         setData(res?.data ?? []);
+      } else if (activeTab === 'Meal Skip Policy') {
+        setData([]);
+        setPolicyLoading(true);
+        const res = await adminTokenAPI.getSkipPolicy();
+        const policy = res?.data || {};
+        setSkipPolicy({
+          minSkipDays: policy.minSkipDays ?? policy.min_skip_days ?? '',
+          minNoticeDays: policy.minNoticeDays ?? policy.min_notice_days ?? '',
+        });
+        setPolicyLoading(false);
       }
     } catch (err) {
       toast.error(`Failed to load ${activeTab}`);
+      if (activeTab === 'Meal Skip Policy') setPolicyLoading(false);
     } finally {
       setLoading(false);
     }
@@ -139,6 +153,28 @@ function MasterData() {
     onChange: (e) => setForm(p => ({ ...p, [key]: e.target.value }))
   });
 
+  const saveSkipPolicy = async (e) => {
+    e.preventDefault();
+    if (skipPolicy.minSkipDays === '' || skipPolicy.minNoticeDays === '') {
+      toast.error('Both minSkipDays and minNoticeDays are required');
+      return;
+    }
+
+    setPolicySaving(true);
+    try {
+      await adminTokenAPI.updateSkipPolicy({
+        minSkipDays: Number(skipPolicy.minSkipDays),
+        minNoticeDays: Number(skipPolicy.minNoticeDays),
+      });
+      toast.success('Meal skip policy updated');
+      fetchData();
+    } catch (err) {
+      toast.error(err.message || 'Failed to update meal skip policy');
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -146,7 +182,7 @@ function MasterData() {
           <h1 className="page-title">Master Data</h1>
           <p className="page-subtitle">Manage lookup values, states, cities, and companies</p>
         </div>
-        {activeTab !== 'Standards' && (
+        {activeTab !== 'Standards' && activeTab !== 'Meal Skip Policy' && (
           <Button onClick={openCreate}>Add {activeTab === 'Entities' ? 'Entity' : activeTab.slice(0, -1)}</Button>
         )}
       </div>
@@ -168,7 +204,36 @@ function MasterData() {
         ))}
       </div>
 
-      {loading ? (
+      {activeTab === 'Meal Skip Policy' ? (
+        <div className="card" style={{ maxWidth: 520 }}>
+          {policyLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner size="lg" /></div>
+          ) : (
+            <form onSubmit={saveSkipPolicy}>
+              <Input
+                label="Min Skip Days"
+                type="number"
+                min="0"
+                value={skipPolicy.minSkipDays}
+                onChange={(e) => setSkipPolicy((p) => ({ ...p, minSkipDays: e.target.value }))}
+                required
+              />
+              <Input
+                label="Min Notice Days"
+                type="number"
+                min="0"
+                value={skipPolicy.minNoticeDays}
+                onChange={(e) => setSkipPolicy((p) => ({ ...p, minNoticeDays: e.target.value }))}
+                required
+                style={{ marginTop: 12 }}
+              />
+              <div className="form-actions" style={{ marginTop: 24 }}>
+                <Button type="submit" loading={policySaving}>Save Policy</Button>
+              </div>
+            </form>
+          )}
+        </div>
+      ) : loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size="lg" /></div>
       ) : data.length === 0 ? (
         <EmptyState title={`No ${activeTab}`} description={`No data available for ${activeTab}`} />
@@ -196,7 +261,7 @@ function MasterData() {
                 {activeTab === 'Standards' && <span>Grade: {item.numeric_value}</span>}
               </div>
 
-              {activeTab !== 'Standards' && (
+              {activeTab !== 'Standards' && activeTab !== 'Meal Skip Policy' && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 10 }}>
                   <Button variant="secondary" size="sm" onClick={() => openEdit(item)}>Edit</Button>
                   <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)} style={{ color: 'var(--danger)' }}>Delete</Button>

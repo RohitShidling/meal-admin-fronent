@@ -239,7 +239,12 @@ export default function Payments() {
                 {payments.map(p => (
                   <tr key={p.id}>
                     <td style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>{p.order_id}</td>
-                    <td style={{ fontSize: 13 }}>{formatDate(p.created_at)}</td>
+                    <td style={{ fontSize: 13 }}>
+                      <div>{formatDate(p.created_at)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Start: {p.subscription_start_date ? formatDate(p.subscription_start_date) : '—'}
+                      </div>
+                    </td>
                     <td>
                       <div style={{ fontWeight: 500 }}>{p.entity_name}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.school_name || p.corporate_location_name || '—'}</div>

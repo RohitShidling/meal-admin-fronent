@@ -111,7 +111,13 @@ export default function IncreaseRemainingPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="form-row form-row-4">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end' }}>
+          <Input
+            label="Search"
+            placeholder="Name / entity / subscription"
+            value={filters.q}
+            onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value, page: 1 }))}
+          />
           <Select
             label="Role"
             value={filters.role}
@@ -121,12 +127,6 @@ export default function IncreaseRemainingPage() {
               <option key={option.value || 'all'} value={option.value}>{option.label}</option>
             ))}
           </Select>
-          <Input
-            label="Search"
-            placeholder="Name / entity / subscription"
-            value={filters.q}
-            onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value, page: 1 }))}
-          />
           <Select
             label="Active status"
             value={filters.activeOnly}
@@ -144,9 +144,9 @@ export default function IncreaseRemainingPage() {
               <option key={value} value={value}>{value}</option>
             ))}
           </Select>
-        </div>
-        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button variant="secondary" onClick={loadUsers} disabled={loading}>Refresh</Button>
+          <Button variant="secondary" onClick={loadUsers} disabled={loading} style={{ height: 38 }}>
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -175,6 +175,7 @@ export default function IncreaseRemainingPage() {
                 <tr>
                   <th>Subscription ID</th>
                   <th>User</th>
+                  <th>Phone</th>
                   <th>Role</th>
                   <th>Entity ID</th>
                   <th>Status</th>
@@ -189,6 +190,7 @@ export default function IncreaseRemainingPage() {
                   <tr key={`${row.role}-${row.entity_id}-${row.subscription_id}`}>
                     <td>{row.subscription_id || '—'}</td>
                     <td>{row.user_name || '—'}</td>
+                    <td>{row.phone_number || row.phone || '—'}</td>
                     <td style={{ textTransform: 'capitalize' }}>{row.role || '—'}</td>
                     <td>{row.entity_id || '—'}</td>
                     <td>

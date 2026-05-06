@@ -52,21 +52,12 @@ export default function Payments() {
   });
 
   const buildPaymentQuery = (f, options = {}) => {
-    const cleaned = (value) => (value == null ? '' : String(value).trim());
-    const entityType = cleaned(f.entityType);
-    const status = cleaned(f.status);
-    const startDate = cleaned(f.startDate);
-    const endDate = cleaned(f.endDate);
     const page = Number(options.page || 1);
     const limit = Number(options.limit || 100);
 
     const q = {
       page,
       limit,
-      ...(entityType ? { entityType, entity_type: entityType, sector: entityType } : {}),
-      ...(status ? { status, order_status: status } : {}),
-      ...(startDate ? { startDate, start_date: startDate, fromDate: startDate, from: startDate } : {}),
-      ...(endDate ? { endDate, end_date: endDate, toDate: endDate, to: endDate } : {}),
     };
 
     // Remove empty strings just in case.

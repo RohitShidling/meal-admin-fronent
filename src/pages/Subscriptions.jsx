@@ -13,7 +13,8 @@ const INITIAL_FORM = {
   price_with_saturday: '',
   price_without_saturday: '',
   billing_cycle: 'monthly',
-  duration_days: '30',
+  duration_days_with_saturday: '',
+  duration_days_without_saturday: '',
   features: [''],
   trial_days: '0',
   display_order: '1',
@@ -81,7 +82,8 @@ export default function Subscriptions() {
       price_with_saturday: (sub.price_with_saturday ?? sub.price)?.toString() || '',
       price_without_saturday: (sub.price_without_saturday ?? sub.price)?.toString() || '',
       billing_cycle: sub.billing_cycle || (sub._type === 'trial' ? 'daily' : 'monthly'),
-      duration_days: sub.duration_days?.toString() || (sub._type === 'trial' ? (sub.trial_days?.toString() || '7') : '30'),
+      duration_days_with_saturday: sub.duration_days_with_saturday?.toString() || '',
+      duration_days_without_saturday: sub.duration_days_without_saturday?.toString() || '',
       features: Array.isArray(sub.features) && sub.features.length > 0 ? sub.features : [''],
       trial_days: sub.trial_days?.toString() || (sub._type === 'trial' ? '7' : '0'),
       meal_size_id: sub.meal_size_id?.toString() || '',
@@ -104,8 +106,11 @@ export default function Subscriptions() {
       e.price_without_saturday = 'Valid price required';
     }
     if (!isTrial && !form.billing_cycle) e.billing_cycle = 'Billing cycle is required';
-    if (!isTrial && (!form.duration_days || !Number.isInteger(Number(form.duration_days)) || Number(form.duration_days) <= 0)) {
-      e.duration_days = 'Duration must be a positive whole number';
+    if (!form.duration_days_with_saturday || !Number.isInteger(Number(form.duration_days_with_saturday)) || Number(form.duration_days_with_saturday) <= 0) {
+      e.duration_days_with_saturday = 'With Saturday duration is required';
+    }
+    if (!form.duration_days_without_saturday || !Number.isInteger(Number(form.duration_days_without_saturday)) || Number(form.duration_days_without_saturday) <= 0) {
+      e.duration_days_without_saturday = 'Without Saturday duration is required';
     }
     if (isTrial && (!form.trial_days || Number(form.trial_days) <= 0)) e.trial_days = 'Trial duration must be at least 1 day';
     if ((form.features || []).filter((x) => String(x || '').trim()).length === 0) {
@@ -132,7 +137,9 @@ export default function Subscriptions() {
       price_without_saturday: Number(form.price_without_saturday),
       price: Number(form.price_with_saturday),
       billing_cycle: isTrial ? 'daily' : form.billing_cycle,
-      duration_days: isTrial ? Number(form.trial_days) : Number(form.duration_days),
+      duration_days: Number(form.duration_days_with_saturday),
+      duration_days_with_saturday: form.duration_days_with_saturday ? Number(form.duration_days_with_saturday) : null,
+      duration_days_without_saturday: form.duration_days_without_saturday ? Number(form.duration_days_without_saturday) : null,
       features: (form.features || []).map((x) => String(x || '').trim()).filter(Boolean),
       trial_days: isTrial ? Number(form.trial_days) : 0,
       meal_size_id: Number(form.meal_size_id),
@@ -413,21 +420,30 @@ export default function Subscriptions() {
             </Select>
           </div>
 
-          {editTarget?._type !== 'trial' && (
-            <div style={{ marginTop: 16 }}>
-              <Input
-                id="sub-duration-days"
-                label="Plan Duration (Days)"
-                type="number"
-                min="1"
-                step="1"
-                placeholder="30"
-                error={errors.duration_days}
-                required
-                {...f('duration_days')}
-              />
-            </div>
-          )}
+          <div className="form-row form-row-2" style={{ marginTop: 16 }}>
+            <Input
+              id="sub-duration-with-sat"
+              label="Duration With Saturday (Days)"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="e.g. 30"
+              error={errors.duration_days_with_saturday}
+              required
+              {...f('duration_days_with_saturday')}
+            />
+            <Input
+              id="sub-duration-without-sat"
+              label="Duration Without Saturday (Days)"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="e.g. 26"
+              error={errors.duration_days_without_saturday}
+              required
+              {...f('duration_days_without_saturday')}
+            />
+          </div>
 
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

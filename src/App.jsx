@@ -12,6 +12,7 @@ import TrialPlans from './pages/TrialPlans';
 import MasterData from './pages/MasterData';
 import Homepage from './pages/Homepage';
 import TokenPage from './pages/Token';
+import IncreaseRemainingPage from './pages/IncreaseRemaining';
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/trial-plans" element={<TrialPlans />} />
             <Route path="/master-data" element={<MasterData />} />
             <Route path="/token" element={<TokenPage />} />
+            <Route path="/increase-remaining" element={<IncreaseRemainingPage />} />
             <Route path="/homepage" element={<Homepage />} />
           </Route>
 

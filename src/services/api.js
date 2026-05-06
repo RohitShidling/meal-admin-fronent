@@ -298,6 +298,22 @@ export const adminMenuNutritionAPI = {
 // ─── Admin Meals APIs ────────────────────────────────────────────────────────
 export const adminMealsAPI = {
   reduceToday: () => request('/api/admin/meals/reduce-today', { method: 'POST' }),
+  reverseReduceToday: () => request('/api/admin/meals/reduce-today/reverse', { method: 'POST' }),
+  getUsers: (params = {}) => {
+    const q = new URLSearchParams(
+      Object.entries(params).reduce((acc, [key, value]) => {
+        if (value === undefined || value === null || value === '') return acc;
+        acc[key] = String(value);
+        return acc;
+      }, {})
+    ).toString();
+    return request(`/api/admin/meals/users${q ? `?${q}` : ''}`);
+  },
+  addRemainingMeals: (entityType, entityId, body) =>
+    request(`/api/admin/meals/users/${encodeRequiredId(entityType, 'entityType')}/${encodeRequiredId(entityId, 'entityId')}/add-remaining-meals`, {
+      method: 'POST',
+      body,
+    }),
   getReductionHistory: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return request(`/api/admin/meals/reduction-history${q ? `?${q}` : ''}`);

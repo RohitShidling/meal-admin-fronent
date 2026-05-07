@@ -303,6 +303,46 @@
 
 .page-info { font-size: 13px; color: var(--text-secondary); }
 
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 60vw;
+  overflow-x: auto;
+  padding: 2px 4px;
+}
+
+.page-num {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.page-num:hover {
+  border-color: var(--accent-primary);
+}
+
+.page-num-active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+.page-ellipsis {
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-weight: 700;
+  user-select: none;
+}
+
 @media (max-width: 768px) {
   .topbar { padding: 0 16px; }
   .topbar-date { display: none; }

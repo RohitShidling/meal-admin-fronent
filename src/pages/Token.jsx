@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { adminTokenAPI, commonAPI } from '../services/api';
+import { adminMealsAPI, adminTokenAPI, commonAPI } from '../services/api';
 import { Badge, Button, EmptyState, Spinner } from '../components/FormElements';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
@@ -40,6 +40,21 @@ function browserDownload(blob, filename) {
   link.click();
   link.remove();
   URL.revokeObjectURL(href);
+}
+
+function safeFilenameSegment(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
+
+function tokenDateForFilename(selectedDate) {
+  const d = String(selectedDate ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  return getTodayDateString();
 }
 
 function formatDateTime(value) {
@@ -200,6 +215,7 @@ export default function TokenPage() {
   const [schoolDetails, setSchoolDetails] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
+  const [mealOpLoading, setMealOpLoading] = useState('');
 
   /** Optional for API: empty string omits ?date (backend uses its default delivery date). */
   const dateArg = selectedDate.trim() === '' ? undefined : selectedDate.trim();
@@ -279,6 +295,26 @@ export default function TokenPage() {
     }
   }, [schoolRows, selectedSchoolId]);
 
+  // Auto-select the first school when School tab loads
+  useEffect(() => {
+    if (activeTab !== 'School') return;
+    if (selectedSchoolId) return;
+    if (!Array.isArray(schoolRows) || schoolRows.length === 0) return;
+
+    const sorted = [...schoolRows].sort((a, b) => {
+      const an = String(a?.name || a?.school_name || '').toLowerCase();
+      const bn = String(b?.name || b?.school_name || '').toLowerCase();
+      return an.localeCompare(bn);
+    });
+    const first = sorted[0];
+    const firstId = first?.school_id || first?.schoolId || first?.id;
+    if (!firstId) return;
+
+    setSelectedSchoolId(String(firstId));
+    setSelectedSchoolKey('');
+    setSchoolDetails([]);
+  }, [activeTab, schoolRows, selectedSchoolId]);
+
   useEffect(() => {
     if (selectedLocationId && !corporateRows.some((r) => String(r.location_id || r.locationId || r.id) === String(selectedLocationId))) {
       setSelectedLocationId('');
@@ -290,7 +326,17 @@ export default function TokenPage() {
     setDownloadingKey(key);
     try {
       const { blob, headers } = await adminTokenAPI.downloadSchoolMealSizePdf(schoolId, mealSizeId, dateArg);
-      browserDownload(blob, readFilename(headers, `school-${schoolId}-${mealSizeId}.pdf`));
+      const tokenDate = tokenDateForFilename(selectedDate);
+      const school = schoolRows.find((s) => String(s.school_id || s.schoolId || s.id) === String(schoolId));
+      const schoolName = safeFilenameSegment(school?.name || school?.school_name || `School-${schoolId}`);
+      const mealSizeLabel = safeFilenameSegment(
+        mealSizeCatalog.find((m) => String(m.id) === String(mealSizeId))?.display_name
+          || mealSizeCatalog.find((m) => String(m.id) === String(mealSizeId))?.displayName
+          || mealSizeCatalog.find((m) => String(m.id) === String(mealSizeId))?.name
+          || `MealSize-${mealSizeId}`
+      );
+      const fallback = `${tokenDate} - ${schoolName} - ${mealSizeLabel} - Token.pdf`;
+      browserDownload(blob, readFilename(headers, fallback) || fallback);
       toast.success('PDF downloaded');
       await loadSchoolOverview();
       if (selectedSchoolKey === key) {
@@ -308,7 +354,11 @@ export default function TokenPage() {
     setDownloadingKey(key);
     try {
       const { blob, headers } = await adminTokenAPI.downloadSchoolPdf(schoolId, dateArg);
-      browserDownload(blob, readFilename(headers, `school-${schoolId}-all-sizes.pdf`));
+      const tokenDate = tokenDateForFilename(selectedDate);
+      const school = schoolRows.find((s) => String(s.school_id || s.schoolId || s.id) === String(schoolId));
+      const schoolName = safeFilenameSegment(school?.name || school?.school_name || `School-${schoolId}`);
+      const fallback = `${tokenDate} - ${schoolName} - All Meal Sizes - Token.pdf`;
+      browserDownload(blob, readFilename(headers, fallback) || fallback);
       toast.success('Whole school PDF downloaded');
       await loadSchoolOverview();
     } catch (err) {
@@ -327,12 +377,13 @@ export default function TokenPage() {
           ? adminTokenAPI.exportCorporatePdf
           : adminTokenAPI.exportAllPdf;
       const { blob, headers } = await apiCall(dateArg);
+      const tokenDate = tokenDateForFilename(selectedDate);
       const fallback = type === 'schools'
-        ? 'all-schools.pdf'
+        ? `${tokenDate} - All Schools - Token.pdf`
         : type === 'corporate'
-          ? 'all-corporate.pdf'
-          : 'all-tokens.pdf';
-      browserDownload(blob, readFilename(headers, fallback));
+          ? `${tokenDate} - All Companies - Token.pdf`
+          : `${tokenDate} - All Tokens (Schools + Companies) - Token.pdf`;
+      browserDownload(blob, readFilename(headers, fallback) || fallback);
       toast.success('Export downloaded');
       if (activeTab === 'School') {
         await loadSchoolOverview();
@@ -351,13 +402,31 @@ export default function TokenPage() {
     setDownloadingKey(key);
     try {
       const { blob, headers } = await adminTokenAPI.downloadCorporatePdf(locationId, dateArg);
-      browserDownload(blob, readFilename(headers, `corporate-${locationId}.pdf`));
+      const tokenDate = tokenDateForFilename(selectedDate);
+      const location = corporateRows.find((r) => String(r.location_id || r.locationId || r.id) === String(locationId));
+      const locationName = safeFilenameSegment(location?.location_name || location?.name || `Company-${locationId}`);
+      const fallback = `${tokenDate} - ${locationName} - Token.pdf`;
+      browserDownload(blob, readFilename(headers, fallback) || fallback);
       toast.success('PDF downloaded');
       await loadCorporateOverview();
     } catch (err) {
       toast.error(err.message || 'Download failed');
     } finally {
       setDownloadingKey('');
+    }
+  };
+
+  const handleMealOperation = async (type) => {
+    setMealOpLoading(type);
+    try {
+      const res = type === 'reduce'
+        ? await adminMealsAPI.reduceToday()
+        : await adminMealsAPI.reverseReduceToday();
+      toast.success(res?.message || (type === 'reduce' ? 'Meal reduction completed' : 'Meal reduction rollback completed'));
+    } catch (err) {
+      toast.error(err.message || (type === 'reduce' ? 'Failed to reduce meals for today' : 'Failed to reverse today reduction'));
+    } finally {
+      setMealOpLoading('');
     }
   };
 
@@ -399,6 +468,20 @@ export default function TokenPage() {
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
+        <Button
+          variant="secondary"
+          loading={mealOpLoading === 'reduce'}
+          onClick={() => handleMealOperation('reduce')}
+        >
+          Reduce Meals for Today
+        </Button>
+        <Button
+          variant="ghost"
+          loading={mealOpLoading === 'reverse'}
+          onClick={() => handleMealOperation('reverse')}
+        >
+          Reverse Today Reduction
+        </Button>
         <Button
           variant="secondary"
           loading={downloadingKey === 'export-schools'}

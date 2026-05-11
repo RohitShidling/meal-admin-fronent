@@ -431,13 +431,13 @@ export default function TokenPage() {
   };
 
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       <div className="page-header">
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h1 className="page-title">Token</h1>
           <p className="page-subtitle">Download school and corporate token PDFs. Top actions export all school, company, or combined records.</p>
         </div>
-        <div style={{ minWidth: 240 }}>
+        <div style={{ minWidth: 0, width: '100%', maxWidth: 280, flexShrink: 0 }}>
           <label htmlFor="token-date" style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Delivery date (optional)</label>
           <input
             id="token-date"
@@ -504,7 +504,19 @@ export default function TokenPage() {
         </Button>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          marginBottom: 20,
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: 10,
+          flexWrap: 'nowrap',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          minWidth: 0,
+        }}
+      >
         {TABS.map((t) => (
           <button
             key={t}

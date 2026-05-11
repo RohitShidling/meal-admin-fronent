@@ -129,10 +129,10 @@ export const adminAuthAPI = {
       body: { phoneNumber: phone, password, username },
     }),
 
-  verifyOTP: (phone, otp) =>
+  verifyOTP: (phone, otp, challengeToken) =>
     request('/api/admin/auth/verify-otp', {
       method: 'POST',
-      body: { phoneNumber: phone, code: otp },
+      body: { phoneNumber: phone, code: otp, challengeToken },
     }),
 
   logout: () =>

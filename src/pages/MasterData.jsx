@@ -176,7 +176,7 @@ function MasterData() {
   };
 
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Master Data</h1>
@@ -187,7 +187,19 @@ function MasterData() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          marginBottom: 20,
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: 10,
+          flexWrap: 'nowrap',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          minWidth: 0,
+        }}
+      >
         {TABS.map(t => (
           <button
             key={t}
@@ -238,7 +250,13 @@ function MasterData() {
       ) : data.length === 0 ? (
         <EmptyState title={`No ${activeTab}`} description={`No data available for ${activeTab}`} />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
+            gap: 16,
+          }}
+        >
           {data.slice().sort((a, b) => {
             if (a.is_active !== b.is_active) {
               return a.is_active ? -1 : 1;

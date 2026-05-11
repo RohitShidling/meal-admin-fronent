@@ -5,6 +5,7 @@ import { Input, Select } from '../components/FormElements';
 import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
+import './Homepage.css';
 
 const INITIAL_FORM = { entity_id: '', name: '', description: '', display_order: '1', is_active: true };
 
@@ -122,53 +123,29 @@ export default function Homepage() {
   });
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Homepage Manager</h1>
-          <p className="page-subtitle">Manage the sections displayed on the public homepage</p>
-        </div>
+    <div className="homepage-manager">
+      <div className="homepage-toolbar">
         <Button icon={<PlusIcon />} onClick={openCreate} id="add-section-btn">
-          Add Section
+          Add section
         </Button>
       </div>
 
-      {/* Info banner */}
-      <div style={{
-        background: 'var(--accent-bg)',
-        border: '1px solid var(--accent-primary)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '12px 16px',
-        marginBottom: 24,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        fontSize: 13,
-        color: 'var(--text-secondary)',
-      }}>
+      <div className="homepage-banner">
         <InfoIcon />
-        <span>
-          Sections are displayed on the public Buuttii website in <strong>display_order</strong> sequence.
-          Each order number must be unique.
+        <span className="homepage-banner__text">
+          Sections appear on the public Buuttii site in <strong>display order</strong>. Each order number should be unique.
         </span>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+      <div className="homepage-tabs" role="tablist" aria-label="Section visibility">
         {['active', 'inactive'].map((tab) => (
           <button
             key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 20,
-              cursor: 'pointer',
-              border: 'none',
-              background: activeTab === tab ? 'var(--accent-primary)' : 'transparent',
-              color: activeTab === tab ? '#fff' : 'var(--text-secondary)',
-              fontWeight: activeTab === tab ? 600 : 500,
-              textTransform: 'capitalize',
-            }}
+            className={`homepage-tab ${activeTab === tab ? 'homepage-tab--active' : 'homepage-tab--inactive'}`}
           >
             {tab === 'active' ? 'Active' : 'Inactive'}
           </button>
@@ -193,46 +170,24 @@ export default function Homepage() {
             .slice()
             .sort((a, b) => a.display_order - b.display_order)
             .map((section) => (
-              <div key={section.id} className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: 20, padding: '20px 24px' }}>
-                {/* Order badge */}
-                <div style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--accent-bg)',
-                  color: 'var(--accent-primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 18,
-                  fontWeight: 800,
-                  flexShrink: 0,
-                }}>
-                  {section.display_order}
-                </div>
-
-                {/* Content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{section.name}</h3>
+              <div key={section.id} className="card homepage-section-card">
+                <div className="homepage-section-card__order">{section.display_order}</div>
+                <div className="homepage-section-card__body">
+                  <div className="homepage-section-card__title-row">
+                    <h3>{section.name}</h3>
                     <Badge variant={section.is_active ? 'success' : 'default'}>
                       {section.is_active ? 'Active' : 'Hidden'}
                     </Badge>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                      ID: {section.id}
-                    </span>
+                    <span className="homepage-section-card__id">ID: {section.id}</span>
                   </div>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '6px 0 0 0' }}>
+                  <p className="homepage-section-card__entity">
                     Entity: <strong>{section.entity_name || 'N/A'}</strong>
                   </p>
-                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '8px 0 0 0', lineHeight: 1.6 }}>
-                    {section.description}
-                  </p>
+                  <p className="homepage-section-card__desc">{section.description}</p>
                 </div>
-
-                {/* Actions */}
-                <div className="action-btns" style={{ flexShrink: 0 }}>
+                <div className="homepage-section-card__actions action-btns">
                   <button
+                    type="button"
                     className="icon-btn"
                     title="Edit section"
                     onClick={() => openEdit(section)}
@@ -241,6 +196,7 @@ export default function Homepage() {
                     <EditIcon />
                   </button>
                   <button
+                    type="button"
                     className="icon-btn icon-btn-danger"
                     title="Delete section"
                     onClick={() => setDeleteTarget(section)}
@@ -262,7 +218,7 @@ export default function Homepage() {
         size="md"
       >
         <form onSubmit={handleSave} id="homepage-section-form">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="homepage-form-grid">
             <Select
               id="section-entity"
               label="Entity"
@@ -326,10 +282,10 @@ export default function Homepage() {
               Active (visible on public homepage)
             </label>
           </div>
-          <div className="form-actions" style={{ marginTop: 24 }}>
+          <div className="form-actions homepage-modal-actions" style={{ marginTop: 24 }}>
             <Button variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button type="submit" loading={saving} id="section-save-btn">
-              {editTarget ? 'Update Section' : 'Create Section'}
+              {editTarget ? 'Update section' : 'Create section'}
             </Button>
           </div>
         </form>

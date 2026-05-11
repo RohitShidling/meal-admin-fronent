@@ -1,11 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from './Sidebar';
 import './Layout.css';
 
+const MOBILE_MAX = 899;
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(`(max-width: ${MOBILE_MAX}px)`).matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_MAX}px)`);
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  return isMobile;
+}
+
 const PAGE_LABELS = {
-  '/dashboard': { title: 'Dashboard', sub: 'Welcome back' },
+  '/dashboard': { title: 'Dashboard', sub: 'Kitchen counts, revenue, and renewals' },
   '/schools': { title: 'Schools', sub: 'Manage school accounts' },
   '/subscriptions': { title: 'Subscriptions', sub: 'Manage meal subscription plans' },
   '/trial-plans': { title: 'Trial Plans', sub: 'Manage trial subscription plans' },
@@ -14,13 +31,39 @@ const PAGE_LABELS = {
   '/payments': { title: 'Payments', sub: 'Track payments and revenue' },
   '/homepage': { title: 'Homepage Manager', sub: 'Manage the public Buuttii homepage' },
   '/master-data': { title: 'Master Data', sub: 'Manage states, cities, companies and more' },
+  '/token': { title: 'Token', sub: 'Print tokens and meal slips' },
+  '/increase-remaining': { title: 'Increase Remaining Meals', sub: 'Adjust remaining meals for subscribers' },
 };
 
 export default function Layout() {
   const { isAuthenticated, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState('light');
   const location = useLocation();
+  const isMobile = useIsMobile();
+
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+
+  useEffect(() => {
+    closeMobileNav();
+  }, [location.pathname, closeMobileNav]);
+
+  useEffect(() => {
+    if (isMobile) document.body.style.overflow = mobileNavOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobile, mobileNavOpen]);
+
+  useEffect(() => {
+    if (!isMobile || !mobileNavOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeMobileNav();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isMobile, mobileNavOpen, closeMobileNav]);
 
   useEffect(() => {
     const stored = localStorage.getItem('admin_theme');
@@ -28,6 +71,18 @@ export default function Layout() {
     setTheme(initialTheme);
     document.documentElement.setAttribute('data-theme', initialTheme);
   }, []);
+
+  /** Lock page scroll to the main column so mobile browsers do not add extra “past the end” scroll. */
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    const rootEl = document.documentElement;
+    rootEl.classList.add('admin-shell');
+    document.body.classList.add('admin-shell');
+    return () => {
+      rootEl.classList.remove('admin-shell');
+      document.body.classList.remove('admin-shell');
+    };
+  }, [isAuthenticated]);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -39,19 +94,52 @@ export default function Layout() {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   const sidebarWidth = collapsed ? 64 : 260;
-  const pageInfo = PAGE_LABELS[location.pathname] || { title: 'Dashboard', sub: '' };
+  const mainMarginLeft = isMobile ? 0 : sidebarWidth;
+  const pageInfo = PAGE_LABELS[location.pathname] || { title: 'Admin', sub: '' };
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="layout">
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
-      <div className="layout-main" style={{ marginLeft: sidebarWidth }}>
+    <div
+      className={`layout${isMobile ? ' layout--mobile' : ''}${mobileNavOpen ? ' layout--nav-open' : ''}`}
+    >
+      {isMobile && mobileNavOpen && (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          aria-label="Close menu"
+          onClick={closeMobileNav}
+        />
+      )}
+      <Sidebar
+        collapsed={isMobile ? false : collapsed}
+        onToggle={() => (isMobile ? setMobileNavOpen((o) => !o) : setCollapsed(!collapsed))}
+        isMobile={isMobile}
+        mobileOpen={mobileNavOpen}
+        onMobileNavSelect={closeMobileNav}
+      />
+      <div className="layout-main" style={{ marginLeft: mainMarginLeft }}>
 
         {/* ── Top Header Bar ── */}
         <header className="topbar">
           <div className="topbar-left">
-            <h1 className="topbar-title">{pageInfo.title}</h1>
-            {pageInfo.sub && <p className="topbar-sub">{pageInfo.sub}</p>}
+            {isMobile && (
+              <button
+                type="button"
+                className="mobile-menu-btn"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open navigation menu"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </svg>
+              </button>
+            )}
+            <div className="topbar-titles">
+              <h1 className="topbar-title">{pageInfo.title}</h1>
+              {pageInfo.sub && <p className="topbar-sub">{pageInfo.sub}</p>}
+            </div>
           </div>
           <div className="topbar-right">
             <span className="topbar-date">{today}</span>

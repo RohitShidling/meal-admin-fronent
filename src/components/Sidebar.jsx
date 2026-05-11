@@ -75,7 +75,13 @@ const navItems = [
   },
 ];
 
-export default function Sidebar({ collapsed, onToggle }) {
+export default function Sidebar({
+  collapsed,
+  onToggle,
+  isMobile = false,
+  mobileOpen = false,
+  onMobileNavSelect,
+}) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,7 +107,9 @@ export default function Sidebar({ collapsed, onToggle }) {
     .find(i => location.pathname.startsWith(i.path))?.label || 'Dashboard';
 
   return (
-    <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
+    <aside
+      className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}${isMobile ? ' sidebar--mobile' : ''}${isMobile && mobileOpen ? ' sidebar--mobile-open' : ''}`}
+    >
 
       {/* Floating toggle tab — always on right edge, always visible */}
       <button
@@ -149,6 +157,9 @@ export default function Sidebar({ collapsed, onToggle }) {
                   className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}
                   title={collapsed ? item.label : undefined}
                   id={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                  onClick={() => {
+                    if (isMobile) onMobileNavSelect?.();
+                  }}
                 >
                   <span className="nav-icon">{item.icon}</span>
                   {!collapsed && <span className="nav-label">{item.label}</span>}
@@ -171,7 +182,10 @@ export default function Sidebar({ collapsed, onToggle }) {
           </div>
           <button
             className="logout-btn"
-            onClick={handleLogout}
+            onClick={() => {
+              if (isMobile) onMobileNavSelect?.();
+              handleLogout();
+            }}
             title="Logout"
             id="logout-btn"
           >

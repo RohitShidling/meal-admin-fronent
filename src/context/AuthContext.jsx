@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState('login'); // 'login' | 'otp'
   const [pendingPhone, setPendingPhone] = useState('');
+  const [challengeToken, setChallengeToken] = useState('');
 
   const isAuthenticated = !!TokenService.getAccessToken() && !!user;
 
@@ -16,10 +17,16 @@ export function AuthProvider({ children }) {
     try {
       const data = await adminAuthAPI.login(phone, password, username);
       setPendingPhone(phone);
+      setChallengeToken(data.challengeToken || '');
       setStep('otp');
       return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, message: err.message };
+      const message =
+        err?.data?.errors?.[0] ||
+        err?.data?.message ||
+        err?.message ||
+        'Failed to send OTP.';
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
@@ -28,27 +35,37 @@ export function AuthProvider({ children }) {
   const verifyOTP = useCallback(async (otp) => {
     setLoading(true);
     try {
-      const res = await adminAuthAPI.verifyOTP(pendingPhone, otp);
+      const res = await adminAuthAPI.verifyOTP(pendingPhone, otp, challengeToken);
       // Backend response: { success, data: { accessToken, refreshToken, user } }
       const { accessToken, refreshToken, user } = res.data || res;
       TokenService.setTokens(accessToken, refreshToken);
       TokenService.setUser(user);
       setUser(user);
       setStep('login');
+      setChallengeToken('');
+      setPendingPhone('');
       return { success: true };
     } catch (err) {
-      return { success: false, message: err.message };
+      const message =
+        err?.data?.errors?.[0] ||
+        err?.data?.message ||
+        err?.message ||
+        'Invalid OTP.';
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
-  }, [pendingPhone]);
+  }, [pendingPhone, challengeToken]);
 
   const logout = useCallback(async () => {
-    try { await adminAuthAPI.logout(); } catch {}
+    try { await adminAuthAPI.logout(); } catch (_logoutError) {
+      // logout should clear local session even if API fails
+    }
     TokenService.clear();
     setUser(null);
     setStep('login');
     setPendingPhone('');
+    setChallengeToken('');
   }, []);
 
   return (

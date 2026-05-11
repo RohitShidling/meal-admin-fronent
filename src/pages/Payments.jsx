@@ -44,7 +44,10 @@ export default function Payments() {
   const [filters, setFilters] = useState({
     schoolId: '',
     entityType: '',
+    planType: '',
+    mealSize: '',
     status: '',
+    search: '',
     startDate: '',
     endDate: '',
     page: 1,
@@ -52,12 +55,20 @@ export default function Payments() {
   });
 
   const buildPaymentQuery = (f, options = {}) => {
-    const page = Number(options.page || 1);
-    const limit = Number(options.limit || 100);
+    const page = Number(options.page || f.page || 1);
+    const limit = Number(options.limit || f.limit || PAGE_SIZE);
 
     const q = {
       page,
       limit,
+      schoolId: f.schoolId,
+      entityType: f.entityType,
+      planType: f.planType,
+      mealSize: f.mealSize,
+      status: f.status,
+      startDate: f.startDate,
+      endDate: f.endDate,
+      search: f.search,
     };
 
     // Remove empty strings just in case.
@@ -103,70 +114,6 @@ export default function Payments() {
     };
   };
 
-  const applyClientSideSchoolFilter = (rows, schoolId) => {
-    const id = String(schoolId || '').trim();
-    if (!id) return rows;
-    const selectedSchool = schools.find((s) => String(s.id ?? s.school_id ?? s.schoolId) === id);
-    const schoolNameRaw = String(selectedSchool?.name ?? selectedSchool?.school_name ?? selectedSchool?.schoolName ?? '').trim();
-    const normalize = (v) =>
-      String(v ?? '')
-        .toLowerCase()
-        .replace(/\s+/g, ' ')
-        .replace(/[’‘]/g, "'")
-        .trim();
-    const schoolName = normalize(schoolNameRaw);
-
-    return (rows || []).filter((p) => {
-      const rowSchoolId = p._schoolId ?? p.school_id ?? p.schoolId ?? p.school ?? p.schoolID;
-      if (rowSchoolId != null && String(rowSchoolId) === id) return true;
-      // Some rows come as "School Name, City" or "School Name, Unknown"
-      // so we do a robust "contains" match.
-      const rowSchoolName = normalize(p._schoolName ?? p.school_name ?? p.schoolName ?? p.school ?? '');
-      if (schoolName && rowSchoolName && (rowSchoolName === schoolName || rowSchoolName.includes(schoolName))) return true;
-      return false;
-    });
-  };
-
-  const applyClientSideFilters = (rows, f) => {
-    let out = Array.isArray(rows) ? rows : [];
-
-    out = applyClientSideSchoolFilter(out, f.schoolId);
-
-    if (String(f.entityType || '').trim()) {
-      const want = String(f.entityType).trim().toLowerCase();
-      const wantedSector = canonicalSector(want);
-      out = out.filter((p) => canonicalSector(p._sector ?? p.entity_type ?? p.entityType ?? p.sector) === wantedSector);
-    }
-
-    if (String(f.status || '').trim()) {
-      const want = String(f.status).trim().toLowerCase();
-      out = out.filter((p) => {
-        const s = String(p._status ?? p.order_status ?? p.status ?? '').toLowerCase();
-        const ps = String(p._paymentStatus ?? p.payment_status ?? p.paymentStatus ?? '').toLowerCase();
-        if (s === want) return true;
-        // Backend may send payment_status=success while UI filter uses "completed".
-        if (want === 'completed' && (s === 'success' || ps === 'success')) return true;
-        return false;
-      });
-    }
-
-    const start = String(f.startDate || '').trim();
-    const end = String(f.endDate || '').trim();
-    if (start || end) {
-      const startMs = start ? new Date(`${start}T00:00:00`).getTime() : null;
-      const endMs = end ? new Date(`${end}T23:59:59`).getTime() : null;
-      out = out.filter((p) => {
-        const ms = new Date(p._createdAt ?? p.created_at ?? p.createdAt ?? p.date ?? '').getTime();
-        if (Number.isNaN(ms)) return false;
-        if (startMs != null && ms < startMs) return false;
-        if (endMs != null && ms > endMs) return false;
-        return true;
-      });
-    }
-
-    return out;
-  };
-
   const getPageItems = (totalPages, currentPage) => {
     const tp = Math.max(1, Number(totalPages || 1));
     const cp = Math.min(Math.max(1, Number(currentPage || 1)), tp);
@@ -197,33 +144,16 @@ export default function Payments() {
         adminSchoolsAPI.getAll({ limit: 100 }), // Fetch more to populate filter
 
       ]);
-      const baseQuery = buildPaymentQuery(filters, { page: 1, limit: 100 });
-
-      const firstPage = await adminPaymentAPI.getAll(baseQuery);
-      const firstRows = Array.isArray(firstPage?.data) ? firstPage.data : [];
-      const p = firstPage?.pagination || {};
-      const totalPages = Number(p.totalPages ?? p.pages ?? 1) || 1;
-
-      let rawRows = [...firstRows];
-      if (totalPages > 1) {
-        const tasks = [];
-        for (let pageNo = 2; pageNo <= totalPages; pageNo += 1) {
-          tasks.push(adminPaymentAPI.getAll({ ...baseQuery, page: pageNo }));
-        }
-        const restResults = await Promise.all(tasks);
-        restResults.forEach((res) => {
-          if (Array.isArray(res?.data)) rawRows = rawRows.concat(res.data);
-        });
-      }
-
-      const normalizedRows = rawRows.map(normalizeRow);
-      const filteredRows = applyClientSideFilters(normalizedRows, filters);
-      const totalItems = filteredRows.length;
-      const uiTotalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
-      const currentPage = Math.min(Math.max(1, Number(filters.page || 1)), uiTotalPages);
-      const startIdx = (currentPage - 1) * PAGE_SIZE;
-      setPayments(filteredRows.slice(startIdx, startIdx + PAGE_SIZE));
-      setPagination({ currentPage, totalPages: uiTotalPages, totalItems, itemsPerPage: PAGE_SIZE });
+      const response = await adminPaymentAPI.getAll(buildPaymentQuery(filters));
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      const normalizedRows = rows.map(normalizeRow);
+      const p = response?.pagination || {};
+      const currentPage = Number(p.page ?? filters.page ?? 1) || 1;
+      const totalPages = Number(p.totalPages ?? 1) || 1;
+      const totalItems = Number(p.total ?? normalizedRows.length) || normalizedRows.length;
+      const itemsPerPage = Number(p.limit ?? PAGE_SIZE) || PAGE_SIZE;
+      setPayments(normalizedRows);
+      setPagination({ currentPage, totalPages, totalItems, itemsPerPage });
       setStats(statsRes.data || null);
       setSchools(schoolsRes.data?.schools || schoolsRes.data || []);
     } catch (err) {
@@ -231,7 +161,7 @@ export default function Payments() {
     } finally {
       setLoading(false);
     }
-  }, [filters, schools]);
+  }, [filters]);
 
   // Enforce 10 rows/page always.
   useEffect(() => {
@@ -405,6 +335,31 @@ export default function Payments() {
             </select>
           </div>
           <div className="filter-item">
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>Plan Type</label>
+            <select
+              value={filters.planType}
+              onChange={(e) => handleFilterChange('planType', e.target.value)}
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+            >
+              <option value="">All Plan Types</option>
+              <option value="trial">Trial Plan</option>
+              <option value="regular">Regular Plan</option>
+            </select>
+          </div>
+          <div className="filter-item">
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>Meal Size</label>
+            <select
+              value={filters.mealSize}
+              onChange={(e) => handleFilterChange('mealSize', e.target.value)}
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+            >
+              <option value="">All Meal Sizes</option>
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+          <div className="filter-item">
             <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>From Date</label>
             <input 
               type="date" 
@@ -419,6 +374,16 @@ export default function Payments() {
               type="date" 
               value={filters.endDate} 
               onChange={(e) => handleFilterChange('endDate', e.target.value)}
+              style={{ width: '100%', padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+            />
+          </div>
+          <div className="filter-item">
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>Search</label>
+            <input
+              type="text"
+              placeholder="Order, customer, phone, plan"
+              value={filters.search}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
               style={{ width: '100%', padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
             />
           </div>
@@ -463,7 +428,12 @@ export default function Payments() {
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getSubLabel(p)}</div>
                     </td>
                     <td>{p._phone || p.client_phone || '—'}</td>
-                    <td>{p._plan || p.subscription_name || '—'}</td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{p._plan || p.subscription_name || '—'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {(p.planType || '').toUpperCase()} {p.mealVariant ? `• ${p.mealVariant}` : ''}
+                      </div>
+                    </td>
                     <td><Badge variant="ghost">{p.sector_label || getSectorLabel(p)}</Badge></td>
                     <td style={{ fontWeight: 600 }}>{formatCurrency(p._amount ?? p.amount)}</td>
                     <td>

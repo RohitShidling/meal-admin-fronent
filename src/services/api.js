@@ -129,7 +129,7 @@ export const adminAuthAPI = {
     request('/api/admin/auth/login', {
       method: 'POST',
       body: {
-        phoneNumber: phone,
+        phoneNumber: String(phone ?? '').trim(),
         password,
         ...(username ? { username } : {}),
       },
@@ -138,7 +138,11 @@ export const adminAuthAPI = {
   verifyOTP: (phone, otp, challengeToken) =>
     request('/api/admin/auth/verify-otp', {
       method: 'POST',
-      body: { phoneNumber: phone, code: otp, challengeToken },
+      body: {
+        phoneNumber: String(phone ?? '').trim(),
+        code: String(otp ?? '').trim(),
+        challengeToken: String(challengeToken ?? '').trim(),
+      },
     }),
 
   logout: () =>

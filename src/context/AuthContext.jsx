@@ -21,7 +21,12 @@ export function AuthProvider({ children }) {
       setStep('otp');
       return { success: true, message: data.message };
     } catch (err) {
-      return { success: false, message: err.message };
+      const message =
+        err?.data?.errors?.[0] ||
+        err?.data?.message ||
+        err?.message ||
+        'Failed to send OTP.';
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
@@ -38,20 +43,29 @@ export function AuthProvider({ children }) {
       setUser(user);
       setStep('login');
       setChallengeToken('');
+      setPendingPhone('');
       return { success: true };
     } catch (err) {
-      return { success: false, message: err.message };
+      const message =
+        err?.data?.errors?.[0] ||
+        err?.data?.message ||
+        err?.message ||
+        'Invalid OTP.';
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
   }, [pendingPhone, challengeToken]);
 
   const logout = useCallback(async () => {
-    try { await adminAuthAPI.logout(); } catch {}
+    try { await adminAuthAPI.logout(); } catch (_logoutError) {
+      // logout should clear local session even if API fails
+    }
     TokenService.clear();
     setUser(null);
     setStep('login');
     setPendingPhone('');
+    setChallengeToken('');
   }, []);
 
   return (

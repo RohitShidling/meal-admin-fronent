@@ -70,7 +70,9 @@ async function request(endpoint, options = {}) {
           TokenService.setTokens(refreshData.data?.accessToken, refreshData.data?.refreshToken);
           return request(endpoint, { ...options, _retry: true });
         }
-      } catch {}
+      } catch (_refreshError) {
+        // noop - caller handles auth fallback
+      }
       
       // If refresh fails, clear and redirect
       TokenService.clear();
@@ -126,13 +128,21 @@ export const adminAuthAPI = {
   login: (phone, password, username) =>
     request('/api/admin/auth/login', {
       method: 'POST',
-      body: { phoneNumber: phone, password, username },
+      body: {
+        phoneNumber: String(phone ?? '').trim(),
+        password,
+        ...(username ? { username } : {}),
+      },
     }),
 
   verifyOTP: (phone, otp, challengeToken) =>
     request('/api/admin/auth/verify-otp', {
       method: 'POST',
-      body: { phoneNumber: phone, code: otp, challengeToken },
+      body: {
+        phoneNumber: String(phone ?? '').trim(),
+        code: String(otp ?? '').trim(),
+        challengeToken: String(challengeToken ?? '').trim(),
+      },
     }),
 
   logout: () =>

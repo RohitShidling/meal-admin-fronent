@@ -17,7 +17,7 @@ export function AuthProvider({ children }) {
     try {
       const data = await adminAuthAPI.login(phone, password, username);
       setPendingPhone(phone);
-      setChallengeToken(data.challengeToken || '');
+      setChallengeToken(data.challengeToken);
       setStep('otp');
       return { success: true, message: data.message };
     } catch (err) {
@@ -78,6 +78,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be inside AuthProvider');

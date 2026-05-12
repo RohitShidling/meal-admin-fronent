@@ -463,7 +463,7 @@ export default function Subscriptions() {
                       padding: '10px 12px',
                       borderRadius: 8,
                       border: '1px solid var(--border)',
-                      background: 'var(--bg-inp ut)',
+                      background: 'var(--bg-input)',
                       color: 'var(--text-primary)'
                     }}
                   />

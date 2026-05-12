@@ -20,6 +20,155 @@ const TokenService = {
 };
 
 const requestCache = new Map();
+const PERSIST_CACHE_PREFIX = 'admin_api_cache_v1:';
+const PERSIST_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+const IMAGE_CACHE_PREFIX = 'admin_image_cache_v1:';
+const IMAGE_CACHE_MAX_ENTRIES = 30;
+
+function getPersistCacheKey(endpoint) {
+  return `${PERSIST_CACHE_PREFIX}${endpoint}`;
+}
+
+function readPersistCache(endpoint) {
+  try {
+    const raw = localStorage.getItem(getPersistCacheKey(endpoint));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (typeof parsed.time !== 'number' || !('data' in parsed)) return null;
+    if (Date.now() - parsed.time > PERSIST_CACHE_TTL_MS) {
+      localStorage.removeItem(getPersistCacheKey(endpoint));
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function writePersistCache(endpoint, data) {
+  try {
+    localStorage.setItem(
+      getPersistCacheKey(endpoint),
+      JSON.stringify({ time: Date.now(), data })
+    );
+  } catch {
+    // Ignore storage full / serialization issues
+  }
+}
+
+function isLikelyNetworkError(error) {
+  if (!error) return false;
+  if (error.name === 'TypeError') return true;
+  return /network|fetch|offline|failed/i.test(String(error.message || ''));
+}
+
+function collectImageUrls(value, out = new Set()) {
+  if (!value || typeof value !== 'object') return out;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectImageUrls(item, out));
+    return out;
+  }
+
+  Object.entries(value).forEach(([key, v]) => {
+    if (typeof v === 'string' && /^https?:\/\//i.test(v)) {
+      const lowerKey = key.toLowerCase();
+      if (
+        lowerKey.includes('image') ||
+        lowerKey.includes('logo') ||
+        lowerKey.includes('thumbnail') ||
+        /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(v)
+      ) {
+        out.add(v);
+      }
+    } else if (v && typeof v === 'object') {
+      collectImageUrls(v, out);
+    }
+  });
+
+  return out;
+}
+
+function getImageCacheKey(url) {
+  return `${IMAGE_CACHE_PREFIX}${url}`;
+}
+
+function touchImageIndex(url) {
+  const indexKey = `${IMAGE_CACHE_PREFIX}__index`;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(indexKey) || '[]');
+    const next = Array.isArray(parsed) ? parsed.filter((u) => u !== url) : [];
+    next.unshift(url);
+    while (next.length > IMAGE_CACHE_MAX_ENTRIES) {
+      const removed = next.pop();
+      if (removed) localStorage.removeItem(getImageCacheKey(removed));
+    }
+    localStorage.setItem(indexKey, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+}
+
+function readCachedImageDataUrl(url) {
+  try {
+    return localStorage.getItem(getImageCacheKey(url));
+  } catch {
+    return null;
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function cacheImageUrl(url) {
+  try {
+    if (readCachedImageDataUrl(url)) {
+      touchImageIndex(url);
+      return;
+    }
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    // Avoid storing very large images in localStorage.
+    if (blob.size > 220 * 1024) return;
+    const dataUrl = await blobToDataUrl(blob);
+    if (typeof dataUrl !== 'string') return;
+    localStorage.setItem(getImageCacheKey(url), dataUrl);
+    touchImageIndex(url);
+  } catch {
+    // ignore image cache failures
+  }
+}
+
+function withCachedImages(value) {
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => withCachedImages(item));
+
+  const copy = { ...value };
+  Object.entries(copy).forEach(([key, v]) => {
+    if (typeof v === 'string' && /^https?:\/\//i.test(v)) {
+      const lowerKey = key.toLowerCase();
+      if (
+        lowerKey.includes('image') ||
+        lowerKey.includes('logo') ||
+        lowerKey.includes('thumbnail') ||
+        /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(v)
+      ) {
+        const cached = readCachedImageDataUrl(v);
+        if (cached) copy[key] = cached;
+      }
+    } else if (v && typeof v === 'object') {
+      copy[key] = withCachedImages(v);
+    }
+  });
+  return copy;
+}
 
 // Core fetch wrapper
 async function request(endpoint, options = {}) {
@@ -51,8 +200,18 @@ async function request(endpoint, options = {}) {
     config.body = JSON.stringify(options.body);
   }
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, config);
-  const data = await res.json().catch(() => ({}));
+  let res;
+  let data;
+  try {
+    res = await fetch(`${BASE_URL}${endpoint}`, config);
+    data = await res.json().catch(() => ({}));
+  } catch (error) {
+    if (isGet && isLikelyNetworkError(error)) {
+      const persisted = readPersistCache(cacheKey);
+      if (persisted) return persisted;
+    }
+    throw error;
+  }
 
   if (!res.ok) {
     // Only attempt refresh for 401s on non-auth endpoints
@@ -81,6 +240,10 @@ async function request(endpoint, options = {}) {
     
     // For 401 on login/auth, or if refresh failed, we just throw the error
     // so the caller (like AuthContext) can handle it.
+    if (isGet && res.status !== 401) {
+      const persisted = readPersistCache(cacheKey);
+      if (persisted) return persisted;
+    }
     const error = new Error(data.message || `HTTP ${res.status}`);
     error.status = res.status;
     error.data = data;
@@ -89,6 +252,14 @@ async function request(endpoint, options = {}) {
 
   if (isGet) {
     requestCache.set(cacheKey, { time: Date.now(), data });
+    const imageUrls = Array.from(collectImageUrls(data)).slice(0, 8);
+    if (imageUrls.length > 0) {
+      Promise.allSettled(imageUrls.map((url) => cacheImageUrl(url))).then(() => {
+        writePersistCache(cacheKey, withCachedImages(data));
+      });
+    } else {
+      writePersistCache(cacheKey, data);
+    }
   }
 
   return data;
@@ -290,8 +461,9 @@ export const adminTrialPlansAPI = {
 export const adminMenuAPI = {
   upload: (formData) =>
     request('/api/admin/menu/upload', { method: 'POST', body: formData }),
-  update: (date, formData) =>
-    request(`/api/admin/menu/${date}`, { method: 'PUT', body: formData }),
+  // sourceDate identifies the existing row to update; formData.menu_date can move it to a new date.
+  update: (sourceDate, formData) =>
+    request(`/api/admin/menu/${sourceDate}`, { method: 'PUT', body: formData }),
   delete: (date) =>
     request(`/api/admin/menu/${date}`, { method: 'DELETE' }),
 };

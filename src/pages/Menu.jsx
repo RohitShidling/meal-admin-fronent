@@ -129,7 +129,8 @@ export default function Menu() {
       if (editTarget) fd.append('is_active', isActive);
 
       if (editTarget) {
-        await adminMenuAPI.update(uploadDate, fd);
+        const sourceDate = editTarget.menu_date ? getLocalYYYYMMDD(editTarget.menu_date) : uploadDate;
+        await adminMenuAPI.update(sourceDate, fd);
         toast.success('Menu updated');
       } else {
         await adminMenuAPI.upload(fd);

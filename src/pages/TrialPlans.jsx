@@ -13,6 +13,8 @@ const INITIAL_FORM = {
   is_active: true,
 };
 
+
+//hi
 export default function TrialPlans() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);

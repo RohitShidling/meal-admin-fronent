@@ -10,6 +10,7 @@ import '../components/Layout.css';
 // Backend fields: plan_name*, price*, billing_cycle*, trial_days, display_order, is_active
 // billing_cycle values: daily | weekly | monthly | quarterly | yearly
 const INITIAL_FORM = {
+  meal_size_id: '',
   price_with_saturday: '',
   price_without_saturday: '',
   billing_cycle: 'monthly',
@@ -67,9 +68,10 @@ export default function Subscriptions() {
     setForm({
       ...INITIAL_FORM,
       billing_cycle: type === 'trial' ? 'daily' : 'monthly',
-      duration_days: type === 'trial' ? '7' : '30',
       features: [''],
-      trial_days: type === 'trial' ? '7' : '0'
+      trial_days: '0',
+      duration_days_with_saturday: type === 'trial' ? '7' : '',
+      duration_days_without_saturday: type === 'trial' ? '7' : '',
     });
     setErrors({});
     setModalOpen(true);
@@ -112,7 +114,6 @@ export default function Subscriptions() {
     if (!form.duration_days_without_saturday || !Number.isInteger(Number(form.duration_days_without_saturday)) || Number(form.duration_days_without_saturday) <= 0) {
       e.duration_days_without_saturday = 'Without Saturday duration is required';
     }
-    if (isTrial && (!form.trial_days || Number(form.trial_days) <= 0)) e.trial_days = 'Trial duration must be at least 1 day';
     if ((form.features || []).filter((x) => String(x || '').trim()).length === 0) {
       e.features = 'Add at least one feature';
     }
@@ -131,17 +132,20 @@ export default function Subscriptions() {
       || mealSizes.find((m) => Number(m.id) === Number(form.meal_size_id))?.name
       || '';
     
+    const withSatDays = Number(form.duration_days_with_saturday);
+    const withoutSatDays = Number(form.duration_days_without_saturday);
     const payload = {
       plan_name: selectedMealSizeName,
       price_with_saturday: Number(form.price_with_saturday),
       price_without_saturday: Number(form.price_without_saturday),
       price: Number(form.price_with_saturday),
       billing_cycle: isTrial ? 'daily' : form.billing_cycle,
-      duration_days: Number(form.duration_days_with_saturday),
-      duration_days_with_saturday: form.duration_days_with_saturday ? Number(form.duration_days_with_saturday) : null,
-      duration_days_without_saturday: form.duration_days_without_saturday ? Number(form.duration_days_without_saturday) : null,
+      duration_days: withSatDays,
+      duration_days_with_saturday: form.duration_days_with_saturday ? withSatDays : null,
+      duration_days_without_saturday: form.duration_days_without_saturday ? withoutSatDays : null,
       features: (form.features || []).map((x) => String(x || '').trim()).filter(Boolean),
-      trial_days: isTrial ? Number(form.trial_days) : 0,
+      // Backend still expects trial_days; derive from "with Saturday" duration only (admin collects two day fields).
+      trial_days: isTrial ? withSatDays : 0,
       meal_size_id: Number(form.meal_size_id),
       display_order: Number(form.display_order) || 1,
       is_active: form.is_active,
@@ -273,7 +277,15 @@ export default function Subscriptions() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
-          {subscriptions.map((sub) => (
+          {subscriptions.map((sub) => {
+            const fallbackDur = Number(sub.duration_days || sub.trial_days || 0);
+            const durWithSat = Number(sub.duration_days_with_saturday);
+            const durWithoutSat = Number(sub.duration_days_without_saturday);
+            const daysWithSaturday =
+              Number.isFinite(durWithSat) && durWithSat > 0 ? durWithSat : fallbackDur;
+            const daysWithoutSaturday =
+              Number.isFinite(durWithoutSat) && durWithoutSat > 0 ? durWithoutSat : fallbackDur;
+            return (
             <div key={sub.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div>
@@ -310,6 +322,9 @@ export default function Subscriptions() {
                   <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent-primary)' }}>
                     ₹{Number(sub.price_with_saturday ?? sub.price).toLocaleString('en-IN')}
                   </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginTop: 8 }}>
+                    {daysWithSaturday > 0 ? `${daysWithSaturday} days` : '—'}
+                  </div>
                 </div>
                 <div
                   style={{
@@ -325,6 +340,9 @@ export default function Subscriptions() {
                   <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent-primary)' }}>
                     ₹{Number(sub.price_without_saturday ?? sub.price).toLocaleString('en-IN')}
                   </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginTop: 8 }}>
+                    {daysWithoutSaturday > 0 ? `${daysWithoutSaturday} days` : '—'}
+                  </div>
                 </div>
               </div>
 
@@ -333,12 +351,6 @@ export default function Subscriptions() {
                 <Badge variant="secondary">
                   {mealSizes.find(m => Number(m.id) === Number(sub.meal_size_id))?.display_name || 'No Size'}
                 </Badge>
-                {(Number(sub.duration_days || sub.trial_days || 0) > 0) && (
-                  <Badge variant="ghost">{Number(sub.duration_days || sub.trial_days || 0)} days</Badge>
-                )}
-                {sub.trial_days > 0 && (
-                  <Badge variant="info">{sub.trial_days} day trial</Badge>
-                )}
               </div>
               {Array.isArray(sub.features) && sub.features.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -356,7 +368,8 @@ export default function Subscriptions() {
                 <Button variant="ghost" size="sm" icon={<TrashIcon />} onClick={() => setDeleteTarget(sub)} id={`delete-sub-${sub.id}`} style={{ color: 'var(--danger)' }}>Delete</Button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -387,19 +400,8 @@ export default function Subscriptions() {
               {...f('price_without_saturday')}
             />
           </div>
+          {editTarget?._type !== 'trial' && (
           <div className="form-row form-row-2" style={{ marginTop: 16 }}>
-            {editTarget?._type === 'trial' ? (
-              <Input
-                id="sub-trial-days"
-                label="Trial Duration (Days)"
-                type="number"
-                min="1"
-                placeholder="7"
-                error={errors.trial_days}
-                required
-                {...f('trial_days')}
-              />
-            ) : (
               <Select id="sub-billing-cycle" label="Billing Cycle" error={errors.billing_cycle} required {...f('billing_cycle')}>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
@@ -407,8 +409,8 @@ export default function Subscriptions() {
                 <option value="quarterly">Quarterly</option>
                 <option value="yearly">Yearly</option>
               </Select>
-            )}
           </div>
+          )}
           <div style={{ marginTop: 16 }}>
             <Select id="sub-meal-size" label="Meal Size" error={errors.meal_size_id} required {...f('meal_size_id')}>
               <option value="">Select meal size</option>

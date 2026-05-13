@@ -101,11 +101,15 @@ export default function Subscriptions() {
     const isTrial = editTarget?._type === 'trial';
     
     if (!form.meal_size_id) e.meal_size_id = 'Meal size is required';
-    if (!form.price_with_saturday || isNaN(Number(form.price_with_saturday)) || Number(form.price_with_saturday) < 0) {
-      e.price_with_saturday = 'Valid price required';
+    const pws = String(form.price_with_saturday ?? '').trim();
+    const pwo = String(form.price_without_saturday ?? '').trim();
+    if (!pws || Number.isNaN(Number(pws)) || Number(pws) < 0
+        || !Number.isInteger(Number(pws))) {
+      e.price_with_saturday = 'Enter a whole-number price (₹)';
     }
-    if (!form.price_without_saturday || isNaN(Number(form.price_without_saturday)) || Number(form.price_without_saturday) < 0) {
-      e.price_without_saturday = 'Valid price required';
+    if (!pwo || Number.isNaN(Number(pwo)) || Number(pwo) < 0
+        || !Number.isInteger(Number(pwo))) {
+      e.price_without_saturday = 'Enter a whole-number price (₹)';
     }
     if (!isTrial && !form.billing_cycle) e.billing_cycle = 'Billing cycle is required';
     if (!form.duration_days_with_saturday || !Number.isInteger(Number(form.duration_days_with_saturday)) || Number(form.duration_days_with_saturday) <= 0) {
@@ -136,9 +140,9 @@ export default function Subscriptions() {
     const withoutSatDays = Number(form.duration_days_without_saturday);
     const payload = {
       plan_name: selectedMealSizeName,
-      price_with_saturday: Number(form.price_with_saturday),
-      price_without_saturday: Number(form.price_without_saturday),
-      price: Number(form.price_with_saturday),
+      price_with_saturday: Math.round(Number(String(form.price_with_saturday).trim())),
+      price_without_saturday: Math.round(Number(String(form.price_without_saturday).trim())),
+      price: Math.round(Number(String(form.price_with_saturday).trim())),
       billing_cycle: isTrial ? 'daily' : form.billing_cycle,
       duration_days: withSatDays,
       duration_days_with_saturday: form.duration_days_with_saturday ? withSatDays : null,
@@ -320,7 +324,7 @@ export default function Subscriptions() {
                     With Saturday
                   </div>
                   <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent-primary)' }}>
-                    ₹{Number(sub.price_with_saturday ?? sub.price).toLocaleString('en-IN')}
+                    ₹{Math.round(Number(sub.price_with_saturday ?? sub.price)).toLocaleString('en-IN')}
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginTop: 8 }}>
                     {daysWithSaturday > 0 ? `${daysWithSaturday} days` : '—'}
@@ -338,7 +342,7 @@ export default function Subscriptions() {
                     Without Saturday
                   </div>
                   <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent-primary)' }}>
-                    ₹{Number(sub.price_without_saturday ?? sub.price).toLocaleString('en-IN')}
+                    ₹{Math.round(Number(sub.price_without_saturday ?? sub.price)).toLocaleString('en-IN')}
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginTop: 8 }}>
                     {daysWithoutSaturday > 0 ? `${daysWithoutSaturday} days` : '—'}
@@ -382,7 +386,7 @@ export default function Subscriptions() {
               label="Price With Saturday (₹)"
               type="number"
               min="0"
-              step="0.01"
+              step="1"
               placeholder="499"
               error={errors.price_with_saturday}
               required
@@ -393,7 +397,7 @@ export default function Subscriptions() {
               label="Price Without Saturday (₹)"
               type="number"
               min="0"
-              step="0.01"
+              step="1"
               placeholder="449"
               error={errors.price_without_saturday}
               required

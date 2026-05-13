@@ -60,7 +60,11 @@ export default function TrialPlans() {
   const validate = () => {
     const e = {};
     if (!form.plan_name.trim()) e.plan_name = 'Plan name is required';
-    if (!form.price || isNaN(Number(form.price)) || Number(form.price) < 0) e.price = 'Valid price required';
+    const priceStr = String(form.price ?? '').trim();
+    const priceNum = priceStr === '' ? NaN : Number(priceStr);
+    if (!priceStr || Number.isNaN(priceNum) || priceNum < 0 || !Number.isInteger(priceNum)) {
+      e.price = 'Enter a whole-number price (₹)';
+    }
     if (!form.duration_days || isNaN(Number(form.duration_days)) || Number(form.duration_days) <= 0) e.duration_days = 'Valid duration required';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -72,7 +76,7 @@ export default function TrialPlans() {
     setSaving(true);
     const payload = {
       plan_name: form.plan_name,
-      price: Number(form.price),
+      price: Math.round(Number(String(form.price).trim())),
       duration_days: Number(form.duration_days),
       is_active: form.is_active,
     };
@@ -153,7 +157,7 @@ export default function TrialPlans() {
 
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                 <span style={{ fontSize: 30, fontWeight: 800, color: 'var(--accent-primary)' }}>
-                  ₹{Number(plan.price).toLocaleString('en-IN')}
+                  ₹{Math.round(Number(plan.price)).toLocaleString('en-IN')}
                 </span>
                 <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                   / {plan.duration_days} days
@@ -187,7 +191,7 @@ export default function TrialPlans() {
               label="Price (₹)"
               type="number"
               min="0"
-              step="0.01"
+              step="1"
               placeholder="99"
               error={errors.price}
               required

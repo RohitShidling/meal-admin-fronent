@@ -19,6 +19,34 @@ const TokenService = {
   },
 };
 
+let adminRefreshInFlight = null;
+
+async function refreshAdminAccessTokenSingleFlight() {
+  if (adminRefreshInFlight) return adminRefreshInFlight;
+  adminRefreshInFlight = (async () => {
+    const refreshRes = await fetch(`${BASE_URL}/api/admin/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: TokenService.getRefreshToken() }),
+    });
+    if (!refreshRes.ok) {
+      TokenService.clear();
+      if (typeof window !== 'undefined' && !window.__adminAuthRedirecting) {
+        window.__adminAuthRedirecting = true;
+        window.location.href = '/login';
+      }
+      const err = new Error('Session expired');
+      err.status = refreshRes.status;
+      throw err;
+    }
+    const refreshData = await refreshRes.json();
+    TokenService.setTokens(refreshData.data?.accessToken, refreshData.data?.refreshToken);
+  })().finally(() => {
+    adminRefreshInFlight = null;
+  });
+  return adminRefreshInFlight;
+}
+
 const requestCache = new Map();
 const PERSIST_CACHE_PREFIX = 'admin_api_cache_v1:';
 const PERSIST_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
@@ -170,6 +198,70 @@ function withCachedImages(value) {
   return copy;
 }
 
+/** Multipart admin request with upload progress (XHR). Retries once on 401 after token refresh. */
+function adminMultipartJson(method, path, formData, opts = {}) {
+  const url = `${BASE_URL}${path}`;
+  const runOnce = () =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const { onProgress, signal } = opts;
+      if (signal) {
+        if (signal.aborted) {
+          reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+          return;
+        }
+        const onAbort = () => {
+          try {
+            xhr.abort();
+          } catch {
+            // ignore
+          }
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+      xhr.open(method, url);
+      const token = TokenService.getAccessToken();
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.timeout = 180000;
+      xhr.upload.onprogress = (e) => {
+        if (typeof onProgress !== 'function') return;
+        if (e.lengthComputable && e.total > 0) {
+          onProgress(Math.min(100, Math.round((100 * e.loaded) / e.total)));
+        } else {
+          onProgress(-1);
+        }
+      };
+      xhr.onload = () => {
+        let body = {};
+        try {
+          body = JSON.parse(xhr.responseText || '{}');
+        } catch {
+          body = {};
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(body);
+          return;
+        }
+        const err = new Error(body.message || `HTTP ${xhr.status}`);
+        err.status = xhr.status;
+        err.data = body;
+        reject(err);
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.onabort = () => reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+      xhr.send(formData);
+    });
+
+  return runOnce().catch(async (err) => {
+    if (err && err.status === 401 && !opts._retry) {
+      await refreshAdminAccessTokenSingleFlight();
+      return adminMultipartJson(method, path, formData, { ...opts, _retry: true });
+    }
+    throw err;
+  });
+}
+
 // Core fetch wrapper
 async function request(endpoint, options = {}) {
   const isGet = !options.method || options.method.toUpperCase() === 'GET';
@@ -219,25 +311,16 @@ async function request(endpoint, options = {}) {
     
     if (res.status === 401 && !options._retry && !isAuthEndpoint) {
       try {
-        const refreshRes = await fetch(`${BASE_URL}/api/admin/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: TokenService.getRefreshToken() }),
-        });
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          TokenService.setTokens(refreshData.data?.accessToken, refreshData.data?.refreshToken);
-          return request(endpoint, { ...options, _retry: true });
-        }
+        await refreshAdminAccessTokenSingleFlight();
+        return request(endpoint, { ...options, _retry: true });
       } catch (_refreshError) {
-        // noop - caller handles auth fallback
+        const err = new Error(data.message || 'Session expired');
+        err.status = 401;
+        err.data = data;
+        throw err;
       }
-      
-      // If refresh fails, clear and redirect
-      TokenService.clear();
-      window.location.href = '/login';
     }
-    
+
     // For 401 on login/auth, or if refresh failed, we just throw the error
     // so the caller (like AuthContext) can handle it.
     if (isGet && res.status !== 401) {
@@ -459,13 +542,12 @@ export const adminTrialPlansAPI = {
 // PUT /api/admin/menu/:date    body: form-data { image?, items, is_active }
 // DELETE /api/admin/menu/:date
 export const adminMenuAPI = {
-  upload: (formData) =>
-    request('/api/admin/menu/upload', { method: 'POST', body: formData }),
-  // sourceDate identifies the existing row to update; formData.menu_date can move it to a new date.
-  update: (sourceDate, formData) =>
-    request(`/api/admin/menu/${sourceDate}`, { method: 'PUT', body: formData }),
+  upload: (formData, opts = {}) =>
+    adminMultipartJson('POST', '/api/admin/menu/upload', formData, opts),
+  update: (sourceDate, formData, opts = {}) =>
+    adminMultipartJson('PUT', `/api/admin/menu/${encodeURIComponent(sourceDate)}`, formData, opts),
   delete: (date) =>
-    request(`/api/admin/menu/${date}`, { method: 'DELETE' }),
+    request(`/api/admin/menu/${encodeURIComponent(date)}`, { method: 'DELETE' }),
 };
 
 export const adminMenuNutritionAPI = {

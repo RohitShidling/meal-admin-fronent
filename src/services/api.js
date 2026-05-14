@@ -1,57 +1,101 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
-// Token management
+/** When true, backend sets HttpOnly refresh cookie (ADMIN_REFRESH_HTTPONLY_COOKIE); enable CORS credentials + same env on Vite. */
+const USE_REFRESH_HTTPONLY_COOKIE = import.meta.env.VITE_ADMIN_REFRESH_HTTPONLY_COOKIE === 'true';
+
+const TOKEN_STORAGE = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage;
+
+const apiOriginDiffers = () => {
+  try {
+    return new URL(BASE_URL).origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+};
+
+const fetchCredentials = () =>
+  USE_REFRESH_HTTPONLY_COOKIE || apiOriginDiffers() ? 'include' : 'same-origin';
+
+// Token management — sessionStorage for access (tab-scoped); refresh in HttpOnly cookie when enabled (B1)
 const TokenService = {
-  getAccessToken: () => localStorage.getItem('admin_access_token'),
-  getRefreshToken: () => localStorage.getItem('admin_refresh_token'),
+  getAccessToken: () => TOKEN_STORAGE.getItem('admin_access_token'),
+  getRefreshToken: () => {
+    if (USE_REFRESH_HTTPONLY_COOKIE) return null;
+    return TOKEN_STORAGE.getItem('admin_refresh_token');
+  },
   setTokens: (access, refresh) => {
-    localStorage.setItem('admin_access_token', access);
-    if (refresh) localStorage.setItem('admin_refresh_token', refresh);
+    if (access) TOKEN_STORAGE.setItem('admin_access_token', access);
+    if (USE_REFRESH_HTTPONLY_COOKIE) {
+      try {
+        TOKEN_STORAGE.removeItem('admin_refresh_token');
+        localStorage.removeItem('admin_refresh_token');
+        localStorage.removeItem('admin_access_token');
+      } catch (_e) {
+        /* ignore */
+      }
+    } else if (refresh) {
+      TOKEN_STORAGE.setItem('admin_refresh_token', refresh);
+    }
   },
   clear: () => {
-    localStorage.removeItem('admin_access_token');
-    localStorage.removeItem('admin_refresh_token');
-    localStorage.removeItem('admin_user');
+    try {
+      TOKEN_STORAGE.removeItem('admin_access_token');
+      TOKEN_STORAGE.removeItem('admin_refresh_token');
+      TOKEN_STORAGE.removeItem('admin_user');
+      localStorage.removeItem('admin_access_token');
+      localStorage.removeItem('admin_refresh_token');
+      localStorage.removeItem('admin_user');
+    } catch (_e) {
+      /* ignore */
+    }
   },
-  setUser: (user) => localStorage.setItem('admin_user', JSON.stringify(user)),
+  setUser: (user) => {
+    try {
+      localStorage.removeItem('admin_user');
+    } catch (_e) {
+      /* ignore */
+    }
+    TOKEN_STORAGE.setItem('admin_user', JSON.stringify(user));
+  },
   getUser: () => {
-    try { return JSON.parse(localStorage.getItem('admin_user')); } catch { return null; }
+    try {
+      const s = TOKEN_STORAGE.getItem('admin_user');
+      if (s) return JSON.parse(s);
+      const legacy = localStorage.getItem('admin_user');
+      if (legacy) {
+        TOKEN_STORAGE.setItem('admin_user', legacy);
+        localStorage.removeItem('admin_user');
+        return JSON.parse(legacy);
+      }
+    } catch {
+      return null;
+    }
+    return null;
   },
 };
 
-let adminRefreshInFlight = null;
-
-async function refreshAdminAccessTokenSingleFlight() {
-  if (adminRefreshInFlight) return adminRefreshInFlight;
-  adminRefreshInFlight = (async () => {
-    const refreshRes = await fetch(`${BASE_URL}/api/admin/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: TokenService.getRefreshToken() }),
-    });
-    if (!refreshRes.ok) {
-      TokenService.clear();
-      if (typeof window !== 'undefined' && !window.__adminAuthRedirecting) {
-        window.__adminAuthRedirecting = true;
-        window.location.href = '/login';
-      }
-      const err = new Error('Session expired');
-      err.status = refreshRes.status;
-      throw err;
-    }
-    const refreshData = await refreshRes.json();
-    TokenService.setTokens(refreshData.data?.accessToken, refreshData.data?.refreshToken);
-  })().finally(() => {
-    adminRefreshInFlight = null;
-  });
-  return adminRefreshInFlight;
-}
-
 const requestCache = new Map();
 const PERSIST_CACHE_PREFIX = 'admin_api_cache_v1:';
-const PERSIST_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
-const IMAGE_CACHE_PREFIX = 'admin_image_cache_v1:';
-const IMAGE_CACHE_MAX_ENTRIES = 30;
+const PERSIST_CACHE_TTL_DEFAULT_MS = Number(import.meta.env.VITE_PERSIST_CACHE_TTL_MS) || 1000 * 60 * 60 * 6; // 6h
+const PERSIST_CACHE_TTL_MUTABLE_MS = Number(import.meta.env.VITE_PERSIST_CACHE_MUTABLE_TTL_MS) || 1000 * 60 * 2; // 2m menus/prices/schools etc.
+
+/** In-memory image data URLs only (B3 — avoid large / shared-machine localStorage). */
+const imageDataUrlCache = new Map();
+const imageCacheLruOrder = [];
+const IMAGE_CACHE_MAX_ENTRIES = 15;
+const IMAGE_MAX_BYTES = 150 * 1024;
+
+function persistCacheTtlMs(endpoint) {
+  const ep = String(endpoint || '');
+  if (
+    /\/api\/admin\/(menu|subscriptions|subscription-plan|schools|homepage|entities|payment|meals|corporate|lookup|trial|tokens|menu-nutrition)/i.test(
+      ep
+    )
+  ) {
+    return PERSIST_CACHE_TTL_MUTABLE_MS;
+  }
+  return PERSIST_CACHE_TTL_DEFAULT_MS;
+}
 
 function getPersistCacheKey(endpoint) {
   return `${PERSIST_CACHE_PREFIX}${endpoint}`;
@@ -64,7 +108,7 @@ function readPersistCache(endpoint) {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
     if (typeof parsed.time !== 'number' || !('data' in parsed)) return null;
-    if (Date.now() - parsed.time > PERSIST_CACHE_TTL_MS) {
+    if (Date.now() - parsed.time > persistCacheTtlMs(endpoint)) {
       localStorage.removeItem(getPersistCacheKey(endpoint));
       return null;
     }
@@ -117,32 +161,20 @@ function collectImageUrls(value, out = new Set()) {
   return out;
 }
 
-function getImageCacheKey(url) {
-  return `${IMAGE_CACHE_PREFIX}${url}`;
-}
-
-function touchImageIndex(url) {
-  const indexKey = `${IMAGE_CACHE_PREFIX}__index`;
-  try {
-    const parsed = JSON.parse(localStorage.getItem(indexKey) || '[]');
-    const next = Array.isArray(parsed) ? parsed.filter((u) => u !== url) : [];
-    next.unshift(url);
-    while (next.length > IMAGE_CACHE_MAX_ENTRIES) {
-      const removed = next.pop();
-      if (removed) localStorage.removeItem(getImageCacheKey(removed));
-    }
-    localStorage.setItem(indexKey, JSON.stringify(next));
-  } catch {
-    // ignore
+function touchImageLru(url) {
+  const i = imageCacheLruOrder.indexOf(url);
+  if (i >= 0) imageCacheLruOrder.splice(i, 1);
+  imageCacheLruOrder.unshift(url);
+  while (imageCacheLruOrder.length > IMAGE_CACHE_MAX_ENTRIES) {
+    const last = imageCacheLruOrder.pop();
+    if (last) imageDataUrlCache.delete(last);
   }
 }
 
 function readCachedImageDataUrl(url) {
-  try {
-    return localStorage.getItem(getImageCacheKey(url));
-  } catch {
-    return null;
-  }
+  const hit = imageDataUrlCache.get(url);
+  if (hit) touchImageLru(url);
+  return hit || null;
 }
 
 function blobToDataUrl(blob) {
@@ -156,19 +188,18 @@ function blobToDataUrl(blob) {
 
 async function cacheImageUrl(url) {
   try {
-    if (readCachedImageDataUrl(url)) {
-      touchImageIndex(url);
+    if (imageDataUrlCache.has(url)) {
+      touchImageLru(url);
       return;
     }
-    const res = await fetch(url, { mode: 'cors' });
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
     if (!res.ok) return;
     const blob = await res.blob();
-    // Avoid storing very large images in localStorage.
-    if (blob.size > 220 * 1024) return;
+    if (blob.size > IMAGE_MAX_BYTES) return;
     const dataUrl = await blobToDataUrl(blob);
     if (typeof dataUrl !== 'string') return;
-    localStorage.setItem(getImageCacheKey(url), dataUrl);
-    touchImageIndex(url);
+    imageDataUrlCache.set(url, dataUrl);
+    touchImageLru(url);
   } catch {
     // ignore image cache failures
   }
@@ -198,70 +229,6 @@ function withCachedImages(value) {
   return copy;
 }
 
-/** Multipart admin request with upload progress (XHR). Retries once on 401 after token refresh. */
-function adminMultipartJson(method, path, formData, opts = {}) {
-  const url = `${BASE_URL}${path}`;
-  const runOnce = () =>
-    new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const { onProgress, signal } = opts;
-      if (signal) {
-        if (signal.aborted) {
-          reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
-          return;
-        }
-        const onAbort = () => {
-          try {
-            xhr.abort();
-          } catch {
-            // ignore
-          }
-        };
-        signal.addEventListener('abort', onAbort, { once: true });
-      }
-      xhr.open(method, url);
-      const token = TokenService.getAccessToken();
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      xhr.timeout = 180000;
-      xhr.upload.onprogress = (e) => {
-        if (typeof onProgress !== 'function') return;
-        if (e.lengthComputable && e.total > 0) {
-          onProgress(Math.min(100, Math.round((100 * e.loaded) / e.total)));
-        } else {
-          onProgress(-1);
-        }
-      };
-      xhr.onload = () => {
-        let body = {};
-        try {
-          body = JSON.parse(xhr.responseText || '{}');
-        } catch {
-          body = {};
-        }
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(body);
-          return;
-        }
-        const err = new Error(body.message || `HTTP ${xhr.status}`);
-        err.status = xhr.status;
-        err.data = body;
-        reject(err);
-      };
-      xhr.onerror = () => reject(new Error('Network error'));
-      xhr.ontimeout = () => reject(new Error('Upload timed out'));
-      xhr.onabort = () => reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
-      xhr.send(formData);
-    });
-
-  return runOnce().catch(async (err) => {
-    if (err && err.status === 401 && !opts._retry) {
-      await refreshAdminAccessTokenSingleFlight();
-      return adminMultipartJson(method, path, formData, { ...opts, _retry: true });
-    }
-    throw err;
-  });
-}
-
 // Core fetch wrapper
 async function request(endpoint, options = {}) {
   const isGet = !options.method || options.method.toUpperCase() === 'GET';
@@ -287,7 +254,11 @@ async function request(endpoint, options = {}) {
     ...options.headers,
   };
 
-  const config = { ...options, headers };
+  const config = {
+    ...options,
+    headers,
+    credentials: options.credentials ?? fetchCredentials(),
+  };
   if (options.body && !(options.body instanceof FormData)) {
     config.body = JSON.stringify(options.body);
   }
@@ -311,16 +282,29 @@ async function request(endpoint, options = {}) {
     
     if (res.status === 401 && !options._retry && !isAuthEndpoint) {
       try {
-        await refreshAdminAccessTokenSingleFlight();
-        return request(endpoint, { ...options, _retry: true });
+        const refreshBody = USE_REFRESH_HTTPONLY_COOKIE
+          ? {}
+          : { refreshToken: TokenService.getRefreshToken() };
+        const refreshRes = await fetch(`${BASE_URL}/api/admin/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: fetchCredentials(),
+          body: JSON.stringify(refreshBody),
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          TokenService.setTokens(refreshData.data?.accessToken, refreshData.data?.refreshToken);
+          return request(endpoint, { ...options, _retry: true });
+        }
       } catch (_refreshError) {
-        const err = new Error(data.message || 'Session expired');
-        err.status = 401;
-        err.data = data;
-        throw err;
+        // noop - caller handles auth fallback
       }
+      
+      // If refresh fails, clear and redirect
+      TokenService.clear();
+      window.location.href = '/login';
     }
-
+    
     // For 401 on login/auth, or if refresh failed, we just throw the error
     // so the caller (like AuthContext) can handle it.
     if (isGet && res.status !== 401) {
@@ -355,7 +339,11 @@ async function requestBlob(endpoint, options = {}) {
     ...options.headers,
   };
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+    credentials: options.credentials ?? fetchCredentials(),
+  });
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -405,7 +393,7 @@ export const adminAuthAPI = {
   refresh: () =>
     request('/api/admin/auth/refresh', {
       method: 'POST',
-      body: { refreshToken: TokenService.getRefreshToken() },
+      body: USE_REFRESH_HTTPONLY_COOKIE ? {} : { refreshToken: TokenService.getRefreshToken() },
     }),
 };
 
@@ -542,12 +530,13 @@ export const adminTrialPlansAPI = {
 // PUT /api/admin/menu/:date    body: form-data { image?, items, is_active }
 // DELETE /api/admin/menu/:date
 export const adminMenuAPI = {
-  upload: (formData, opts = {}) =>
-    adminMultipartJson('POST', '/api/admin/menu/upload', formData, opts),
-  update: (sourceDate, formData, opts = {}) =>
-    adminMultipartJson('PUT', `/api/admin/menu/${encodeURIComponent(sourceDate)}`, formData, opts),
+  upload: (formData) =>
+    request('/api/admin/menu/upload', { method: 'POST', body: formData }),
+  // sourceDate identifies the existing row to update; formData.menu_date can move it to a new date.
+  update: (sourceDate, formData) =>
+    request(`/api/admin/menu/${sourceDate}`, { method: 'PUT', body: formData }),
   delete: (date) =>
-    request(`/api/admin/menu/${encodeURIComponent(date)}`, { method: 'DELETE' }),
+    request(`/api/admin/menu/${date}`, { method: 'DELETE' }),
 };
 
 export const adminMenuNutritionAPI = {
@@ -666,8 +655,7 @@ export const adminEntitiesAPI = {
 };
 
 // ─── Common APIs ──────────────────────────────────────────────────────────────
-// GET /api/common/subscriptions          Response: { count, data: [] }
-// GET /api/common/subscriptions/:id      Response: { data: {} }
+// GET /api/admin/subscription-plan-days   (admin token; common client-only paths return 403 for admin)
 // GET /api/common/corporate-locations    Response: { count, data: [] }
 // GET /api/common/menu/history/all       Response: { count, data: [] }
 //   Menu row: { id, image_url, items, menu_date, created_at }
@@ -688,8 +676,8 @@ export const commonAPI = {
   getCities: (stateId) => request(`/api/common/lookup/cities${stateId ? `?stateId=${stateId}` : ''}`),
   getEntities: () => request('/api/admin/entities'),
   getCorporateLocations: () => request('/api/common/corporate-locations'),
-  getSubscriptions: () => request('/api/common/subscription-plan-days'),
-  getSubscriptionById: (id) => request(`/api/common/subscription-plan-days/${id}`),
+  getSubscriptions: () => request('/api/admin/subscription-plan-days'),
+  getSubscriptionById: (id) => request(`/api/admin/subscription-plan-days/${id}`),
   getMenuHistory: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return request(`/api/common/menu/history/all${q ? `?${q}` : ''}`);

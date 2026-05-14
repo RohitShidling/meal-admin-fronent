@@ -38,9 +38,6 @@ export default function Menu() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const fileRef = useRef(null);
-  const uploadAbortRef = useRef(null);
-  const [uploadPct, setUploadPct] = useState(0);
-  const [uploadIndeterminate, setUploadIndeterminate] = useState(false);
 
   const fetchMenus = useCallback(async () => {
     setLoading(true);
@@ -85,9 +82,6 @@ export default function Menu() {
     setNutritionPoints(['']);
     setIsActive(true);
     setUploadDate(todayStr());
-    setUploadPct(0);
-    setUploadIndeterminate(false);
-    uploadAbortRef.current = null;
     setUploadOpen(true);
   };
 
@@ -98,9 +92,6 @@ export default function Menu() {
     setItems(menu.items || '');
     setIsActive(menu.is_active ?? true);
     setUploadDate(menu.menu_date ? getLocalYYYYMMDD(menu.menu_date) : todayStr());
-    setUploadPct(0);
-    setUploadIndeterminate(false);
-    uploadAbortRef.current = null;
     setUploadOpen(true);
     const menuDate = menu.menu_date ? getLocalYYYYMMDD(menu.menu_date) : todayStr();
     adminMenuNutritionAPI.getByDate(menuDate)
@@ -127,9 +118,6 @@ export default function Menu() {
     if (!editTarget && !selectedFile) { toast.warning('Please select an image'); return; }
     if (!uploadDate) { toast.warning('Please select a date'); return; }
     setSaving(true);
-    setUploadPct(0);
-    const ac = new AbortController();
-    uploadAbortRef.current = ac;
     try {
       // Backend expects multipart/form-data:
       // POST /upload: fields { image (file), menu_date, items }
@@ -140,25 +128,12 @@ export default function Menu() {
       if (items) fd.append('items', items);
       if (editTarget) fd.append('is_active', isActive);
 
-      const uploadOpts = {
-        signal: ac.signal,
-        onProgress: (p) => {
-          if (typeof p !== 'number') return;
-          if (p < 0) {
-            setUploadIndeterminate(true);
-            return;
-          }
-          setUploadIndeterminate(false);
-          setUploadPct(p);
-        },
-      };
-
       if (editTarget) {
         const sourceDate = editTarget.menu_date ? getLocalYYYYMMDD(editTarget.menu_date) : uploadDate;
-        await adminMenuAPI.update(sourceDate, fd, uploadOpts);
+        await adminMenuAPI.update(sourceDate, fd);
         toast.success('Menu updated');
       } else {
-        await adminMenuAPI.upload(fd, uploadOpts);
+        await adminMenuAPI.upload(fd);
         toast.success('Menu uploaded');
       }
 
@@ -171,17 +146,8 @@ export default function Menu() {
       setUploadOpen(false);
       fetchMenus();
     } catch (err) {
-      if (err && (err.name === 'AbortError' || /aborted/i.test(String(err.message)))) {
-        toast.warning('Upload cancelled');
-      } else {
-        toast.error(err.message || 'Operation failed');
-      }
-    } finally {
-      uploadAbortRef.current = null;
-      setUploadPct(0);
-      setUploadIndeterminate(false);
-      setSaving(false);
-    }
+      toast.error(err.message || 'Operation failed');
+    } finally { setSaving(false); }
   };
 
   const updateNutrition = (idx, value) => {
@@ -288,15 +254,7 @@ export default function Menu() {
       )}
 
       {/* Upload/Edit Modal */}
-      <Modal
-        isOpen={uploadOpen}
-        onClose={() => {
-          if (saving && uploadAbortRef.current) uploadAbortRef.current.abort();
-          setUploadOpen(false);
-        }}
-        title={editTarget ? 'Update Menu' : 'Upload Menu'}
-        size="md"
-      >
+      <Modal isOpen={uploadOpen} onClose={() => setUploadOpen(false)} title={editTarget ? 'Update Menu' : 'Upload Menu'} size="md">
         <form onSubmit={handleSave} id="menu-form">
           <Input
             id="menu-date"
@@ -410,34 +368,8 @@ export default function Menu() {
               </label>
             </div>
           )}
-          {saving && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                {uploadIndeterminate ? 'Uploading…' : `Uploading… ${uploadPct}%`}
-              </div>
-              {uploadIndeterminate ? (
-                <progress
-                  style={{
-                    width: '100%',
-                    height: 10,
-                    display: 'block',
-                    accentColor: 'var(--accent-primary)',
-                  }}
-                />
-              ) : (
-                <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-input)', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                  <div style={{ width: `${uploadPct}%`, height: '100%', background: 'var(--accent-primary)', transition: 'width 0.15s ease-out' }} />
-                </div>
-              )}
-            </div>
-          )}
           <div className="form-actions" style={{ marginTop: 24 }}>
-            <Button variant="ghost" type="button" onClick={() => { if (saving && uploadAbortRef.current) uploadAbortRef.current.abort(); setUploadOpen(false); }}>Cancel</Button>
-            {saving && (
-              <Button variant="secondary" type="button" onClick={() => uploadAbortRef.current?.abort()}>
-                Cancel upload
-              </Button>
-            )}
+            <Button variant="ghost" type="button" onClick={() => setUploadOpen(false)}>Cancel</Button>
             <Button type="submit" loading={saving} id="menu-save-btn">
               {editTarget ? 'Update Menu' : 'Upload Menu'}
             </Button>

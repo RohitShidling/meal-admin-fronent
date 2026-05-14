@@ -23,7 +23,15 @@ export function showToast(message, type = 'info', duration = 3500) {
     info: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
   };
 
-  toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span class="toast-msg">${message}</span>`;
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'toast-icon';
+  // Trusted static SVG markup only (type is one of success|error|warning|info).
+  iconWrap.innerHTML = icons[type] || icons.info;
+  const msgEl = document.createElement('span');
+  msgEl.className = 'toast-msg';
+  msgEl.textContent = message == null ? '' : String(message);
+  toast.appendChild(iconWrap);
+  toast.appendChild(msgEl);
   container.appendChild(toast);
 
   requestAnimationFrame(() => toast.classList.add('show'));

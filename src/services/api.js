@@ -425,6 +425,13 @@ export const adminAnalyticsAPI = {
     const q = new URLSearchParams({ days, entityType }).toString();
     return request(`/api/admin/subscriptions/analytics/expiring-soon?${q}`);
   },
+  getLowRemainingMeals: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.maxRemaining != null) q.set('maxRemaining', String(params.maxRemaining));
+    if (params.entityType) q.set('entityType', String(params.entityType));
+    const qs = q.toString();
+    return request(`/api/admin/subscriptions/analytics/low-remaining-meals${qs ? `?${qs}` : ''}`);
+  },
   getAllMembersStatus: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return request(`/api/admin/subscriptions/analytics/all-members${q ? `?${q}` : ''}`);
@@ -551,6 +558,13 @@ export const adminMenuNutritionAPI = {
 // ─── Admin Meals APIs ────────────────────────────────────────────────────────
 export const adminMealsAPI = {
   reduceToday: () => request('/api/admin/meals/reduce-today', { method: 'POST' }),
+  getReduceScopeOptions: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.date) q.set('date', String(params.date));
+    const qs = q.toString();
+    return request(`/api/admin/meals/reduce-scope-options${qs ? `?${qs}` : ''}`);
+  },
+  reduceScoped: (body) => request('/api/admin/meals/reduce-scoped', { method: 'POST', body }),
   reverseReduceToday: () => request('/api/admin/meals/reduce-today/reverse', { method: 'POST' }),
   getUsers: (params = {}) => {
     const q = new URLSearchParams(
@@ -576,13 +590,28 @@ export const adminMealsAPI = {
   getTokensAll: () => `${BASE_URL}/api/admin/meals/tokens/all?token=${TokenService.getAccessToken()}`,
 };
 
+export const adminMealSizeUpgradeAPI = {
+  getAll: () => request('/api/admin/meal-size-upgrade-prices'),
+  getHistory: (limit = 50) => request(`/api/admin/meal-size-upgrade-prices/history?limit=${limit}`),
+  upsert: (body) => request('/api/admin/meal-size-upgrade-prices', { method: 'POST', body }),
+  delete: (id) => request(`/api/admin/meal-size-upgrade-prices/${id}`, { method: 'DELETE' }),
+};
+
 // ─── Admin Corporate Locations APIs ──────────────────────────────────────────
 // GET  /api/admin/corporate-locations              Get all corporate locations
 // POST /api/admin/corporate-locations              Body: { name*, address*, city*, state*, is_active }
 // PUT  /api/admin/corporate-locations/{id}         Body: { name?, address?, city?, state?, is_active? }
 // DELETE /api/admin/corporate-locations/{id}       Delete a location
 export const adminCorporateAPI = {
-  getAll: () => request('/api/admin/corporate-locations'),
+  getAll: (params = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v === '' || v === undefined || v === null) return;
+      q.set(k, String(v));
+    });
+    const qs = q.toString();
+    return request(`/api/admin/corporate-locations${qs ? `?${qs}` : ''}`);
+  },
   create: (data) =>
     request('/api/admin/corporate-locations', { method: 'POST', body: data }),
   update: (id, data) =>
@@ -599,6 +628,10 @@ export const adminPaymentAPI = {
     return request(`/api/admin/payment/all${q ? `?${q}` : ''}`);
   },
   getStats: () => request('/api/admin/payment/stats'),
+  getOpenCarts: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/payment/open-carts${q ? `?${q}` : ''}`);
+  },
 };
 
 // ─── Admin Homepage APIs ─────────────────────────────────────────────────────

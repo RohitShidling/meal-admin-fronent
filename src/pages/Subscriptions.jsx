@@ -52,7 +52,11 @@ export default function Subscriptions() {
       
       const trialSubs = Array.isArray(trialRes?.data) ? trialRes.data.map(s => ({ ...s, _type: 'trial' })) : [];
       
-      const combined = [...regularSubs, ...trialSubs].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      const combined = [...regularSubs, ...trialSubs].sort((a, b) => {
+        const typeOrder = (a._type === 'regular' ? 0 : 1) - (b._type === 'regular' ? 0 : 1);
+        if (typeOrder !== 0) return typeOrder;
+        return (a.display_order || 0) - (b.display_order || 0);
+      });
       setSubscriptions(combined);
       const mealSizesRes = await commonAPI.getMealSizes().catch(() => ({ data: { mealSizes: [] } }));
       setMealSizes(Array.isArray(mealSizesRes?.data?.mealSizes) ? mealSizesRes.data.mealSizes : []);

@@ -4,14 +4,19 @@ import { Spinner, EmptyState, Badge, Button } from '../components/FormElements';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 const STATUS_COLORS = {
   success: 'success',
   completed: 'success',
   pending: 'warning',
+  pending_checkout: 'warning',
   failed: 'danger',
   cancelled: 'secondary',
+};
+
+const STATUS_LABELS = {
+  pending_checkout: 'Pending checkout',
 };
 
 const ENTITY_LABELS = {
@@ -38,7 +43,7 @@ export default function Payments() {
   const [stats, setStats] = useState(null);
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, totalItems: 0, itemsPerPage: 10 });
+  const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, totalItems: 0, itemsPerPage: PAGE_SIZE });
   
   // Filters
   const [filters, setFilters] = useState({
@@ -139,12 +144,11 @@ export default function Payments() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsRes, schoolsRes] = await Promise.all([
+      const [statsRes, schoolsRes, response] = await Promise.all([
         adminPaymentAPI.getStats(),
-        adminSchoolsAPI.getAll({ limit: 100 }), // Fetch more to populate filter
-
+        adminSchoolsAPI.getAll({ limit: 300 }),
+        adminPaymentAPI.getAll(buildPaymentQuery(filters)),
       ]);
-      const response = await adminPaymentAPI.getAll(buildPaymentQuery(filters));
       const rows = Array.isArray(response?.data) ? response.data : [];
       const normalizedRows = rows.map(normalizeRow);
       const p = response?.pagination || {};
@@ -163,7 +167,7 @@ export default function Payments() {
     }
   }, [filters]);
 
-  // Enforce 10 rows/page always.
+  // Enforce 20 rows/page always.
   useEffect(() => {
     if (filters.limit !== PAGE_SIZE) {
       setFilters((prev) => ({ ...prev, limit: PAGE_SIZE, page: 1 }));
@@ -288,6 +292,7 @@ export default function Payments() {
         </div>
       )}
 
+
       {/* Filters Card */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
@@ -332,6 +337,7 @@ export default function Payments() {
               <option value="pending">Pending</option>
               <option value="failed">Failed</option>
               <option value="cancelled">Cancelled</option>
+              <option value="pending_checkout">Pending checkout</option>
             </select>
           </div>
           <div className="filter-item">
@@ -438,7 +444,7 @@ export default function Payments() {
                     <td style={{ fontWeight: 600 }}>{formatCurrency(p._amount ?? p.amount)}</td>
                     <td>
                       <Badge variant={STATUS_COLORS[p._status ?? p.order_status] || 'secondary'}>
-                        {p._status || p.order_status || 'unknown'}
+                        {STATUS_LABELS[p._status] || p._status || p.order_status || 'unknown'}
                       </Badge>
                     </td>
                   </tr>

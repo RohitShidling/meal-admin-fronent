@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { adminAuthAPI, TokenService } from '../services/api';
 import Sidebar from './Sidebar';
 import './Layout.css';
 
@@ -31,6 +32,7 @@ const PAGE_LABELS = {
   '/payments': { title: 'Payments', sub: 'Track payments and revenue' },
   '/homepage': { title: 'Homepage Manager', sub: 'Manage the public Buuttii homepage' },
   '/master-data': { title: 'Master Data', sub: 'Manage states, cities, companies and more' },
+  '/meal-size-upgrades': { title: 'Meal Size Upgrades', sub: 'One-time fees for profile meal size bumps' },
   '/token': { title: 'Token', sub: 'Print tokens and meal slips' },
   '/increase-remaining': { title: 'Increase Remaining Meals', sub: 'Adjust remaining meals for subscribers' },
 };
@@ -81,6 +83,23 @@ export default function Layout() {
     return () => {
       rootEl.classList.remove('admin-shell');
       document.body.classList.remove('admin-shell');
+    };
+  }, [isAuthenticated]);
+
+  /** Proactive JWT refresh — avoids logout when ADMIN_JWT_EXPIRES_IN is short; still respects expiry. */
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    const bump = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!TokenService.getAccessToken()) return;
+      adminAuthAPI.refresh().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', bump);
+    const intervalMs = Number(import.meta.env.VITE_ADMIN_TOKEN_REFRESH_INTERVAL_MS) || 10 * 60 * 1000;
+    const id = window.setInterval(bump, intervalMs);
+    return () => {
+      document.removeEventListener('visibilitychange', bump);
+      window.clearInterval(id);
     };
   }, [isAuthenticated]);
 

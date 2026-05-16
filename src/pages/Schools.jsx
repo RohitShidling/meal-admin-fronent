@@ -9,6 +9,28 @@ import '../components/Layout.css';
 // Backend fields: name*, address*, city*, state*, pincode*, country, is_active
 const INITIAL_FORM = { name: '', address: '', city: '', state: '', pincode: '', country: 'India', is_active: true };
 
+function getPageItems(totalPages, currentPage) {
+  const tp = Math.max(1, Number(totalPages || 1));
+  const cp = Math.min(Math.max(1, Number(currentPage || 1)), tp);
+  if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+
+  const items = new Set([1, tp, cp]);
+  if (cp - 1 > 1) items.add(cp - 1);
+  if (cp + 1 < tp) items.add(cp + 1);
+  if (cp - 2 > 1) items.add(cp - 2);
+  if (cp + 2 < tp) items.add(cp + 2);
+
+  const sorted = Array.from(items).sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const v = sorted[i];
+    const prev = sorted[i - 1];
+    if (i > 0 && v - prev > 1) out.push('…');
+    out.push(v);
+  }
+  return out;
+}
+
 export default function Schools() {
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +62,7 @@ export default function Schools() {
     }
   }, [selectedStateId]);
 
-  const limit = 10;
+  const limit = 20;
 
   const fetchSchools = useCallback(async () => {
     setLoading(true);
@@ -219,9 +241,30 @@ export default function Schools() {
 
         {pagination.totalPages > 1 && (
           <div className="pagination">
-            <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <span className="page-info">Page {page} of {pagination.totalPages}</span>
-            <Button variant="ghost" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
+            <div className="pagination-pages">
+              {getPageItems(pagination.totalPages, page).map((item, idx) =>
+                item === '…' ? (
+                  <span key={`ellipsis-${idx}`} className="page-ellipsis">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`page-num ${item === page ? 'page-num-active' : ''}`}
+                    onClick={() => setPage(item)}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
+            </div>
+            <Button variant="ghost" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
           </div>
         )}
       </div>

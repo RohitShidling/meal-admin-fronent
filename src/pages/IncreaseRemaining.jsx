@@ -14,10 +14,32 @@ const ROLE_OPTIONS = [
 
 const LIMIT_OPTIONS = ['20', '50', '100', '200'];
 
+function getPageItems(totalPages, currentPage) {
+  const tp = Math.max(1, Number(totalPages || 1));
+  const cp = Math.min(Math.max(1, Number(currentPage || 1)), tp);
+  if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+
+  const items = new Set([1, tp, cp]);
+  if (cp - 1 > 1) items.add(cp - 1);
+  if (cp + 1 < tp) items.add(cp + 1);
+  if (cp - 2 > 1) items.add(cp - 2);
+  if (cp + 2 < tp) items.add(cp + 2);
+
+  const sorted = Array.from(items).sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const v = sorted[i];
+    const prev = sorted[i - 1];
+    if (i > 0 && v - prev > 1) out.push('…');
+    out.push(v);
+  }
+  return out;
+}
+
 export default function IncreaseRemainingPage() {
-  const [filters, setFilters] = useState({ role: '', q: '', activeOnly: 'true', page: 1, limit: 50 });
+  const [filters, setFilters] = useState({ role: '', q: '', activeOnly: 'true', page: 1, limit: 20 });
   const [rows, setRows] = useState([]);
-  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 50 });
+  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 20 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -114,7 +136,7 @@ export default function IncreaseRemainingPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end' }}>
           <Input
             label="Search"
-            placeholder="Name / entity / subscription"
+            placeholder="Name, phone, plan, entity, or subscription id"
             value={filters.q}
             onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value, page: 1 }))}
           />
@@ -214,22 +236,44 @@ export default function IncreaseRemainingPage() {
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
               Showing page {pagination.page} of {totalPages} ({pagination.total} users)
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button
-                variant="ghost"
-                onClick={() => setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                disabled={pagination.page <= 1}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => setFilters((prev) => ({ ...prev, page: Math.min(totalPages, prev.page + 1) }))}
-                disabled={pagination.page >= totalPages}
-              >
-                Next
-              </Button>
-            </div>
+            {totalPages > 1 && (
+              <div className="pagination" style={{ marginTop: 0 }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFilters((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                  disabled={pagination.page <= 1}
+                >
+                  Previous
+                </Button>
+                <div className="pagination-pages">
+                  {getPageItems(totalPages, pagination.page).map((item, idx) =>
+                    item === '…' ? (
+                      <span key={`ellipsis-${idx}`} className="page-ellipsis">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`page-num ${item === pagination.page ? 'page-num-active' : ''}`}
+                        onClick={() => setFilters((prev) => ({ ...prev, page: item }))}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFilters((prev) => ({ ...prev, page: Math.min(totalPages, prev.page + 1) }))}
+                  disabled={pagination.page >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { adminMealsAPI, adminTokenAPI, commonAPI } from '../services/api';
 import { Badge, Button, EmptyState, Spinner } from '../components/FormElements';
 import { toast } from '../components/Toast';
@@ -20,6 +20,20 @@ function toArray(payload) {
   if (Array.isArray(payload?.locations)) return payload.locations;
   if (Array.isArray(payload?.items)) return payload.items;
   return [];
+}
+
+/** Backend `/tokens/corporate` uses corporate_location_*; legacy rows may use location_* / id. */
+function corpLocationId(row) {
+  if (!row || typeof row !== 'object') return '';
+  const id = row.corporate_location_id ?? row.location_id ?? row.locationId ?? row.id;
+  if (id === undefined || id === null || String(id).trim() === '') return '';
+  return String(id).trim();
+}
+
+function corpLocationName(row) {
+  if (!row || typeof row !== 'object') return '';
+  const name = row.corporate_location_name ?? row.location_name ?? row.name ?? '';
+  return String(name).trim();
 }
 
 function readFilename(headers, fallback) {
@@ -131,7 +145,7 @@ function SearchableDropdown({
         }}
       >
         <span>{selected?.name || placeholder}</span>
-        <span style={{ fontSize: 11, opacity: 0.8 }}>▼</span>
+        <span style={{ fontSize: 11, opacity: 0.8 }}>â–¼</span>
       </button>
 
       {open && (
@@ -216,6 +230,13 @@ export default function TokenPage() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [mealOpLoading, setMealOpLoading] = useState('');
+  const [scopedModalOpen, setScopedModalOpen] = useState(false);
+  const [scopedOptionsLoading, setScopedOptionsLoading] = useState(false);
+  const [scopedOptionsError, setScopedOptionsError] = useState('');
+  const [scopedOptions, setScopedOptions] = useState({ schools: [], corporates: [] });
+  const [scopedSchoolIds, setScopedSchoolIds] = useState([]);
+  const [scopedCorpIds, setScopedCorpIds] = useState([]);
+  const [scopedSubmitting, setScopedSubmitting] = useState(false);
 
   /** Optional for API: empty string omits ?date (backend uses its default delivery date). */
   const dateArg = selectedDate.trim() === '' ? undefined : selectedDate.trim();
@@ -316,10 +337,28 @@ export default function TokenPage() {
   }, [activeTab, schoolRows, selectedSchoolId]);
 
   useEffect(() => {
-    if (selectedLocationId && !corporateRows.some((r) => String(r.location_id || r.locationId || r.id) === String(selectedLocationId))) {
+    if (
+      selectedLocationId &&
+      !corporateRows.some((r) => corpLocationId(r) === String(selectedLocationId))
+    ) {
       setSelectedLocationId('');
     }
   }, [corporateRows, selectedLocationId]);
+
+  // Auto-select the first corporate location when Corporate tab loads
+  useEffect(() => {
+    if (activeTab !== 'Corporate') return;
+    if (selectedLocationId) return;
+    if (!Array.isArray(corporateRows) || corporateRows.length === 0) return;
+
+    const sorted = [...corporateRows].sort((a, b) => {
+      const an = corpLocationName(a).toLowerCase();
+      const bn = corpLocationName(b).toLowerCase();
+      return an.localeCompare(bn);
+    });
+    const firstId = corpLocationId(sorted[0]);
+    if (firstId) setSelectedLocationId(firstId);
+  }, [activeTab, corporateRows, selectedLocationId]);
 
   const handleSchoolDownload = async (schoolId, mealSizeId) => {
     const key = `${schoolId}-${mealSizeId}`;
@@ -403,8 +442,10 @@ export default function TokenPage() {
     try {
       const { blob, headers } = await adminTokenAPI.downloadCorporatePdf(locationId, dateArg);
       const tokenDate = tokenDateForFilename(selectedDate);
-      const location = corporateRows.find((r) => String(r.location_id || r.locationId || r.id) === String(locationId));
-      const locationName = safeFilenameSegment(location?.location_name || location?.name || `Company-${locationId}`);
+      const location = corporateRows.find((r) => corpLocationId(r) === String(locationId));
+      const locationName = safeFilenameSegment(
+        corpLocationName(location || {}) || `Company-${locationId}`
+      );
       const fallback = `${tokenDate} - ${locationName} - Token.pdf`;
       browserDownload(blob, readFilename(headers, fallback) || fallback);
       toast.success('PDF downloaded');
@@ -413,6 +454,82 @@ export default function TokenPage() {
       toast.error(err.message || 'Download failed');
     } finally {
       setDownloadingKey('');
+    }
+  };
+
+  const openScopedReduceModal = async () => {
+    setScopedModalOpen(true);
+    setScopedOptionsLoading(true);
+    setScopedOptionsError('');
+    setScopedSchoolIds([]);
+    setScopedCorpIds([]);
+    try {
+      const res = await adminMealsAPI.getReduceScopeOptions(dateArg ? { date: dateArg } : {});
+      const data = res?.data ?? res;
+      setScopedOptions({
+        schools: Array.isArray(data?.schools) ? data.schools : [],
+        corporates: Array.isArray(data?.corporates) ? data.corporates : [],
+      });
+    } catch (err) {
+      setScopedOptionsError(err.message || 'Failed to load scope options');
+      setScopedOptions({ schools: [], corporates: [] });
+    } finally {
+      setScopedOptionsLoading(false);
+    }
+  };
+
+  const toggleScopedSchool = (schoolId) => {
+    const s = String(schoolId);
+    setScopedSchoolIds((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
+  };
+
+  const toggleScopedCorp = (corpId) => {
+    const s = String(corpId);
+    setScopedCorpIds((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
+  };
+
+  const selectAllScopedSchools = () => {
+    const all = scopedOptions.schools.map((row) => String(row.school_id));
+    const allIncluded = all.length > 0 && all.every((id) => scopedSchoolIds.includes(id));
+    setScopedSchoolIds(allIncluded ? [] : all);
+  };
+
+  const selectAllScopedCorps = () => {
+    const all = scopedOptions.corporates.map((row) =>
+      String(row.corporate_location_id ?? row.location_id ?? row.id ?? '')
+    ).filter(Boolean);
+    const allIncluded = all.length > 0 && all.every((id) => scopedCorpIds.includes(id));
+    setScopedCorpIds(allIncluded ? [] : all);
+  };
+
+  const submitScopedReduce = async () => {
+    if (scopedSchoolIds.length === 0 && scopedCorpIds.length === 0) {
+      toast.error('Select at least one school or corporate location');
+      return;
+    }
+    setScopedSubmitting(true);
+    try {
+      const body = {
+        schoolIds: scopedSchoolIds,
+        corporateLocationIds: scopedCorpIds,
+      };
+      if (dateArg) body.date = dateArg;
+      const res = await adminMealsAPI.reduceScoped(body);
+      toast.success(res?.message || 'Scoped reduction completed');
+      setScopedModalOpen(false);
+      if (activeTab === 'School') {
+        await loadSchoolOverview();
+      } else {
+        await loadCorporateOverview();
+      }
+    } catch (err) {
+      toast.error(err.message || 'Scoped reduction failed');
+    } finally {
+      setScopedSubmitting(false);
     }
   };
 
@@ -474,6 +591,13 @@ export default function TokenPage() {
           onClick={() => handleMealOperation('reduce')}
         >
           Reduce Meals for Today
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={openScopedReduceModal}
+        >
+          Scoped reduce…
         </Button>
         <Button
           variant="ghost"
@@ -571,6 +695,131 @@ export default function TokenPage() {
           downloadingKey={downloadingKey}
         />
       )}
+
+      {scopedModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="scoped-reduce-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => {
+            if (!scopedSubmitting) setScopedModalOpen(false);
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: 560,
+              width: '100%',
+              maxHeight: '88vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              margin: 0,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+              <h3 id="scoped-reduce-title" style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
+                Scoped meal reduction
+              </h3>
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                Deduct one meal only for subscriptions linked to selected schools or company locations.
+                Delivery date: <strong>{dateArg || getTodayDateString()}</strong>
+              </p>
+            </div>
+            <div style={{ padding: 14, overflowY: 'auto', flex: 1, minHeight: 0 }}>
+              {scopedOptionsLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner /></div>
+              ) : scopedOptionsError ? (
+                <EmptyState
+                  title="Could not load options"
+                  description={scopedOptionsError}
+                  action={
+                    <Button type="button" size="sm" onClick={() => openScopedReduceModal()}>
+                      Retry
+                    </Button>
+                  }
+                />
+              ) : (
+                <>
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <strong style={{ fontSize: 14 }}>Schools</strong>
+                      <button type="button" onClick={selectAllScopedSchools} style={{ border: 'none', background: 'none', color: 'var(--accent-primary)', cursor: 'pointer', fontSize: 13, textDecoration: 'underline', padding: 0 }}>
+                        Toggle all
+                      </button>
+                    </div>
+                    {scopedOptions.schools.length === 0 ? (
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No schools with eligible tokens for this date.</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+                        {scopedOptions.schools.map((row) => {
+                          const sid = String(row.school_id);
+                          const label = row.school_name || sid;
+                          return (
+                            <label key={sid} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={scopedSchoolIds.includes(sid)} onChange={() => toggleScopedSchool(sid)} />
+                              <span>{label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <strong style={{ fontSize: 14 }}>Company locations</strong>
+                      <button type="button" onClick={selectAllScopedCorps} style={{ border: 'none', background: 'none', color: 'var(--accent-primary)', cursor: 'pointer', fontSize: 13, textDecoration: 'underline', padding: 0 }}>
+                        Toggle all
+                      </button>
+                    </div>
+                    {scopedOptions.corporates.length === 0 ? (
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No corporate locations with eligible professionals for this date.</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+                        {scopedOptions.corporates.map((row) => {
+                          const cid = String(row.corporate_location_id ?? row.location_id ?? row.id ?? '');
+                          if (!cid) return null;
+                          const label = row.corporate_location_name || row.location_name || cid;
+                          return (
+                            <label key={cid} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={scopedCorpIds.includes(cid)} onChange={() => toggleScopedCorp(cid)} />
+                              <span>
+                                {label}
+                                {row.professionals_count != null ? (
+                                  <span style={{ color: 'var(--text-muted)', fontSize: 12 }}> — {row.professionals_count} pro</span>
+                                ) : null}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+            <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0, flexWrap: 'wrap' }}>
+              <Button type="button" variant="ghost" disabled={scopedSubmitting} onClick={() => setScopedModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" loading={scopedSubmitting} disabled={scopedOptionsLoading || !!scopedOptionsError} onClick={submitScopedReduce}>
+                Reduce selected
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -590,14 +839,6 @@ function SchoolTab({
   onDownloadWholeSchool,
   downloadingKey,
 }) {
-  if (!rows.length) {
-    return (
-      <div className="card">
-        <EmptyState title="No schools available" description="No school token records found yet." />
-      </div>
-    );
-  }
-
   const panelMap = useMemo(() => {
     const map = new Map();
     panelRows.forEach((row) => {
@@ -625,6 +866,14 @@ function SchoolTab({
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [rows]);
+
+  if (!rows.length) {
+    return (
+      <div className="card">
+        <EmptyState title="No schools available" description="No school token records found for this date." />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -748,7 +997,7 @@ function SchoolTab({
                         size.displayName ||
                         size.name ||
                         mealSizeLabelById.get(String(mealSizeId)) ||
-                        (mealSizeId != null ? `Meal Size ${mealSizeId}` : '—');
+                        (mealSizeId != null ? mealSizeLabelById.get(String(mealSizeId)) ?? `Meal Size ${mealSizeId}` : '—');
                       return (
                         <tr key={key}>
                           <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{mealSizeLabel}</td>
@@ -829,6 +1078,7 @@ function SchoolTab({
           )}
         </div>
       )}
+
     </div>
   );
 }
@@ -840,27 +1090,29 @@ function CorporateTab({
   onDownload,
   downloadingKey,
 }) {
-  if (!rows.length) {
-    return (
-      <div className="card">
-        <EmptyState title="No corporate locations available" description="No corporate token records found yet." />
-      </div>
-    );
-  }
-
-  const selectedRow = selectedLocationId
-    ? rows.find((r) => String(r.location_id || r.locationId || r.id) === String(selectedLocationId))
-    : null;
-
   const corporateOptions = useMemo(() => {
     return rows
       .map((r) => {
-        const id = r.location_id || r.locationId || r.id;
-        const name = r.location_name || r.name || `Location ${id}`;
-        return { id: String(id), name };
+        const id = corpLocationId(r);
+        const name = corpLocationName(r) || (id ? `Location ${id}` : '');
+        return id ? { id: String(id), name } : null;
       })
+      .filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [rows]);
+
+  const selectedRow = useMemo(() => {
+    if (!selectedLocationId) return null;
+    return rows.find((r) => corpLocationId(r) === String(selectedLocationId)) || null;
+  }, [rows, selectedLocationId]);
+
+  if (!rows.length) {
+    return (
+      <div className="card">
+        <EmptyState title="No corporate locations" description="No company token records found for this date." />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -888,7 +1140,9 @@ function CorporateTab({
         <div className="card" style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <div>
-              <h3 style={{ fontSize: 17, fontWeight: 700 }}>{selectedRow.location_name || selectedRow.name}</h3>
+              <h3 style={{ fontSize: 17, fontWeight: 700 }}>
+                {corpLocationName(selectedRow) || `Location ${corpLocationId(selectedRow)}`}
+              </h3>
               <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
                 Professionals: <strong>{selectedRow.professionals_count ?? 0}</strong>
               </p>

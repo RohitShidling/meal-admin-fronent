@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminDashboardAPI, adminMealsAPI, adminAnalyticsAPI } from '../services/api';
-import { Spinner, Button } from '../components/FormElements';
+import { Spinner } from '../components/FormElements';
 import { toast } from '../components/Toast';
 import '../components/Layout.css';
 import './Dashboard.css';
@@ -26,27 +26,29 @@ function entityRevenueBarColor(type) {
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ schools: 0, subscriptions: 0, locations: 0, menus: 0, revenue: 0 });
-  const [standards, setStandards] = useState([]);
   const [kitchenReport, setKitchenReport] = useState(null);
   const [analytics, setAnalytics] = useState(null);
-  const [expiringSoon, setExpiringSoon] = useState([]);
+  /** child | teacher | professional | '' (all) — low remaining meals panel */
+  const [renewalCategory, setRenewalCategory] = useState('');
+  const [lowMealAlerts, setLowMealAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [reducing, setReducing] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [dashRes, kitchenRes, analyticsRes, expiringRes] = await Promise.all([
+      const [dashRes, kitchenRes, analyticsRes, lowRes] = await Promise.all([
         adminDashboardAPI.getStats(),
         adminMealsAPI.getKitchenReport(),
         adminAnalyticsAPI.getOverview(),
-        adminAnalyticsAPI.getExpiringSoon(7),
+        adminAnalyticsAPI.getLowRemainingMeals({
+          maxRemaining: 5,
+          ...(renewalCategory ? { entityType: renewalCategory } : {}),
+        }),
       ]);
 
       setStats(dashRes.data.stats);
-      setStandards(dashRes.data.standards);
       setKitchenReport(kitchenRes.data);
       setAnalytics(analyticsRes.data);
-      setExpiringSoon(expiringRes.data || []);
+      setLowMealAlerts(lowRes.data || []);
     } catch (err) {
       console.error(err);
       toast.error('Failed to load some dashboard data');
@@ -57,25 +59,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-  }, []);
-
-  const handleReduceMeals = async () => {
-    if (!window.confirm('Reduce meals for today? This can only be done once per day.')) return;
-    setReducing(true);
-    try {
-      const res = await adminMealsAPI.reduceToday();
-      toast.success(res.message);
-      fetchData();
-    } catch (err) {
-      toast.error(err.message || 'Failed to reduce meals');
-    } finally {
-      setReducing(false);
-    }
-  };
-
-  const handleDownloadTokens = () => {
-    window.open(adminMealsAPI.getTokensAll(), '_blank');
-  };
+  }, [renewalCategory]);
 
   const grandRevenue = Number(analytics?.totals?.grand_revenue) || 0;
   const byEntity = Array.isArray(analytics?.byEntityType) ? analytics.byEntityType : [];
@@ -106,17 +90,6 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-      <div className="dashboard-toolbar">
-        <div className="dashboard-toolbar-actions">
-          <Button variant="secondary" onClick={handleDownloadTokens}>
-            Download tokens
-          </Button>
-          <Button loading={reducing} onClick={handleReduceMeals}>
-            Reduce meals today
-          </Button>
-        </div>
-      </div>
-
       <div className="stats-grid">
         {statCards.map((s) => (
           <div key={s.label} className="stat-card">
@@ -213,17 +186,46 @@ export default function Dashboard() {
 
       <div className="dashboard-section-spaced">
         <div className="card">
-          <h2 className="dashboard-expiring-head">
-            <span>Expiring within 7 days</span>
-            {expiringSoon.length > 0 && (
-              <span className="badge" style={{ background: '#fee2e2', color: '#991b1b' }}>
-                {expiringSoon.length} {expiringSoon.length === 1 ? 'subscription' : 'subscriptions'}
+          <h2 className="dashboard-expiring-head" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <span>Low remaining meals (≤5)</span>
+            {lowMealAlerts.length > 0 && (
+              <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>
+                {lowMealAlerts.length} {lowMealAlerts.length === 1 ? 'subscription' : 'subscriptions'}
               </span>
             )}
           </h2>
-          {expiringSoon.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.45 }}>
+            Based on meals left on the subscription, not calendar dates. Filters apply to Students, Teachers, or Corporate subscribers.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {[
+              { id: '', label: 'All' },
+              { id: 'child', label: 'Students' },
+              { id: 'teacher', label: 'Teachers' },
+              { id: 'professional', label: 'Professionals' },
+            ].map((tab) => (
+              <button
+                key={tab.id || 'all'}
+                type="button"
+                onClick={() => setRenewalCategory(tab.id)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 999,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  background: renewalCategory === tab.id ? 'var(--accent-primary)' : 'var(--bg-hover)',
+                  color: renewalCategory === tab.id ? '#fff' : 'var(--text-secondary)',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {lowMealAlerts.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: 14, textAlign: 'center', padding: '20px 0', margin: 0 }}>
-              No subscriptions expiring in the next 7 days.
+              No active subscriptions have 5 meals or fewer remaining.
             </p>
           ) : (
             <>
@@ -234,13 +236,14 @@ export default function Dashboard() {
                       <th>Member</th>
                       <th>School / workplace</th>
                       <th>Phone</th>
+                      <th>Plan</th>
+                      <th>Remaining</th>
                       <th>End date</th>
-                      <th>Days left</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {expiringSoon.map((sub, idx) => (
-                      <tr key={idx}>
+                    {lowMealAlerts.map((sub, idx) => (
+                      <tr key={`${sub.entity_type}-${sub.entity_id}-${idx}`}>
                         <td>
                           <div style={{ fontWeight: 600 }}>{sub.entity_name}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
@@ -249,28 +252,29 @@ export default function Dashboard() {
                         </td>
                         <td>{sub.institution_name}</td>
                         <td>{sub.client_phone}</td>
-                        <td>{new Date(sub.end_date).toLocaleDateString()}</td>
+                        <td>{sub.plan_name}</td>
                         <td>
                           <span
                             style={{
                               fontWeight: 700,
-                              color: sub.days_remaining <= 2 ? '#ef4444' : '#f59e0b',
-                              background: sub.days_remaining <= 2 ? '#fee2e2' : '#fef3c7',
+                              color: sub.remaining_meals <= 2 ? '#ef4444' : '#f59e0b',
+                              background: sub.remaining_meals <= 2 ? '#fee2e2' : '#fef3c7',
                               padding: '2px 8px',
                               borderRadius: 12,
                             }}
                           >
-                            {sub.days_remaining}d
+                            {sub.remaining_meals}
                           </span>
                         </td>
+                        <td>{sub.end_date ? new Date(sub.end_date).toLocaleDateString() : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <ul className="dashboard-expiring-cards" aria-label="Expiring subscriptions">
-                {expiringSoon.map((sub, idx) => (
-                  <li key={idx} className="dashboard-expiring-card">
+              <ul className="dashboard-expiring-cards" aria-label="Low remaining meals">
+                {lowMealAlerts.map((sub, idx) => (
+                  <li key={`${sub.entity_type}-${sub.entity_id}-m-${idx}`} className="dashboard-expiring-card">
                     <h3>{sub.entity_name}</h3>
                     <div className="meta">{formatEntityTypeLabel(sub.entity_type)}</div>
                     <div className="row">
@@ -282,18 +286,18 @@ export default function Dashboard() {
                       <span>{sub.client_phone}</span>
                     </div>
                     <div className="row">
-                      <span>Ends</span>
-                      <span>{new Date(sub.end_date).toLocaleDateString()}</span>
+                      <span>Plan</span>
+                      <span>{sub.plan_name}</span>
                     </div>
                     <div className="row">
-                      <span>Days left</span>
+                      <span>Remaining meals</span>
                       <span
                         style={{
                           fontWeight: 700,
-                          color: sub.days_remaining <= 2 ? '#ef4444' : '#f59e0b',
+                          color: sub.remaining_meals <= 2 ? '#ef4444' : '#f59e0b',
                         }}
                       >
-                        {sub.days_remaining}
+                        {sub.remaining_meals}
                       </span>
                     </div>
                   </li>
@@ -304,23 +308,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="dashboard-section-spaced">
-        <div className="card">
-          <h2 className="dashboard-card-title" style={{ marginBottom: 16 }}>
-            Curriculum standards
-          </h2>
-          <div className="dashboard-standards">
-            {standards.map((s) => (
-              <span key={s.id} className="badge" style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
-                {s.display_name || s.name}
-              </span>
-            ))}
-            {standards.length === 0 && (
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No standards configured.</p>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

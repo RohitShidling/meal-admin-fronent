@@ -13,6 +13,7 @@ import MasterData from './pages/MasterData';
 import Homepage from './pages/Homepage';
 import TokenPage from './pages/Token';
 import IncreaseRemainingPage from './pages/IncreaseRemaining';
+import MealSizeUpgrades from './pages/MealSizeUpgrades';
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/payments" element={<Payments />} />
             <Route path="/trial-plans" element={<TrialPlans />} />
             <Route path="/master-data" element={<MasterData />} />
+            <Route path="/meal-size-upgrades" element={<MealSizeUpgrades />} />
             <Route path="/token" element={<TokenPage />} />
             <Route path="/increase-remaining" element={<IncreaseRemainingPage />} />
             <Route path="/homepage" element={<Homepage />} />

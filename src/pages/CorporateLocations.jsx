@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { adminCorporateAPI, commonAPI } from '../services/api';
 import { Button, EmptyState, Spinner, ConfirmDialog } from '../components/FormElements';
 import { Input, Select } from '../components/FormElements';
@@ -7,6 +7,29 @@ import { toast } from '../components/Toast';
 import '../components/Layout.css';
 
 const INITIAL_FORM = { name: '', address: '', city: '', state: '', is_active: true };
+const PAGE_SIZE = 20;
+
+function getPageItems(totalPages, currentPage) {
+  const tp = Math.max(1, Number(totalPages || 1));
+  const cp = Math.min(Math.max(1, Number(currentPage || 1)), tp);
+  if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+
+  const items = new Set([1, tp, cp]);
+  if (cp - 1 > 1) items.add(cp - 1);
+  if (cp + 1 < tp) items.add(cp + 1);
+  if (cp - 2 > 1) items.add(cp - 2);
+  if (cp + 2 < tp) items.add(cp + 2);
+
+  const sorted = Array.from(items).sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const v = sorted[i];
+    const prev = sorted[i - 1];
+    if (i > 0 && v - prev > 1) out.push('…');
+    out.push(v);
+  }
+  return out;
+}
 
 export default function CorporateLocations() {
   const [locations, setLocations] = useState([]);
@@ -24,6 +47,15 @@ export default function CorporateLocations() {
   const [statesList, setStatesList] = useState([]);
   const [citiesList, setCitiesList] = useState([]);
   const [selectedStateId, setSelectedStateId] = useState('');
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: PAGE_SIZE,
+  });
 
   useEffect(() => {
     commonAPI.getStates().then(res => setStatesList(res?.data || []));
@@ -37,17 +69,46 @@ export default function CorporateLocations() {
     }
   }, [selectedStateId]);
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   const fetchLocations = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await adminCorporateAPI.getAll();
-      setLocations(Array.isArray(res?.data) ? res.data : []);
+      const res = await adminCorporateAPI.getAll({
+        page,
+        limit: PAGE_SIZE,
+        ...(search ? { search } : {}),
+      });
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      const p = res?.pagination || {};
+      setLocations(rows);
+      setPagination({
+        currentPage: Number(p.currentPage ?? page) || 1,
+        totalPages: Number(p.totalPages ?? 1) || 1,
+        totalItems: Number(p.totalItems ?? rows.length) || 0,
+        itemsPerPage: Number(p.itemsPerPage ?? PAGE_SIZE) || PAGE_SIZE,
+      });
     } catch (err) {
       toast.error(err.message || 'Failed to load locations');
-    } finally { setLoading(false); }
-  }, []);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search]);
 
-  useEffect(() => { fetchLocations(); }, [fetchLocations]);
+  useEffect(() => {
+    fetchLocations();
+  }, [fetchLocations]);
+
+  const pageOffset = useMemo(
+    () => (pagination.currentPage - 1) * (pagination.itemsPerPage || PAGE_SIZE),
+    [pagination.currentPage, pagination.itemsPerPage]
+  );
 
   const openCreate = () => {
     setEditTarget(null);
@@ -153,6 +214,15 @@ export default function CorporateLocations() {
         </Button>
       </div>
 
+      <div className="card" style={{ marginBottom: 16, padding: 16 }}>
+        <Input
+          label="Search"
+          placeholder="Name, city, or address…"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
+      </div>
+
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size="lg" /></div>
       ) : locations.length === 0 ? (
@@ -160,8 +230,8 @@ export default function CorporateLocations() {
           <EmptyState
             icon={<PinSVG />}
             title="No corporate locations"
-            description="Add your first corporate delivery location"
-            action={<Button onClick={openCreate} icon={<PlusIcon />}>Add Location</Button>}
+            description={search ? 'Try a different search.' : 'Add your first corporate delivery location'}
+            action={!search ? <Button onClick={openCreate} icon={<PlusIcon />}>Add Location</Button> : undefined}
           />
         </div>
       ) : (
@@ -182,7 +252,7 @@ export default function CorporateLocations() {
               <tbody>
                 {locations.map((loc, i) => (
                   <tr key={loc.id}>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{i + 1}</td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{pageOffset + i + 1}</td>
                     <td><span style={{ fontWeight: 600 }}>{loc.name}</span></td>
                     <td style={{ maxWidth: 220 }}>
                       <span className="truncate" style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -227,6 +297,45 @@ export default function CorporateLocations() {
               </tbody>
             </table>
           </div>
+
+          {pagination.totalPages > 1 && (
+            <div className="pagination" style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={pagination.currentPage <= 1}
+              >
+                Previous
+              </Button>
+              <div className="pagination-pages">
+                {getPageItems(pagination.totalPages, pagination.currentPage).map((item, idx) =>
+                  item === '…' ? (
+                    <span key={`ellipsis-${idx}`} className="page-ellipsis">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`page-num ${item === pagination.currentPage ? 'page-num-active' : ''}`}
+                      onClick={() => setPage(item)}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                disabled={pagination.currentPage >= pagination.totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

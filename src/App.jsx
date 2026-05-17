@@ -14,7 +14,11 @@ import Homepage from './pages/Homepage';
 import TokenPage from './pages/Token';
 import IncreaseRemainingPage from './pages/IncreaseRemaining';
 import MealSizeUpgrades from './pages/MealSizeUpgrades';
-import BulkOrders from './pages/BulkOrders';
+import BulkOrdersLayout from './pages/bulk-orders/BulkOrdersLayout';
+import BulkOrderSettings from './pages/bulk-orders/BulkOrderSettings';
+import BulkOrderCategories from './pages/bulk-orders/BulkOrderCategories';
+import BulkOrderMeals from './pages/bulk-orders/BulkOrderMeals';
+import BulkOrderOrders from './pages/bulk-orders/BulkOrderOrders';
 
 export default function App() {
   return (
@@ -38,7 +42,12 @@ export default function App() {
             <Route path="/token" element={<TokenPage />} />
             <Route path="/increase-remaining" element={<IncreaseRemainingPage />} />
             <Route path="/homepage" element={<Homepage />} />
-            <Route path="/bulk-orders" element={<BulkOrders />} />
+            <Route path="/bulk-orders" element={<BulkOrdersLayout />}>
+              <Route path="settings" element={<BulkOrderSettings />} />
+              <Route path="categories" element={<BulkOrderCategories />} />
+              <Route path="meals" element={<BulkOrderMeals />} />
+              <Route path="orders" element={<BulkOrderOrders />} />
+            </Route>
           </Route>
 
           {/* Fallback */}

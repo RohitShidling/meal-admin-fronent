@@ -769,6 +769,13 @@ export const adminEntitiesAPI = {
 export const adminBulkOrdersAPI = {
   getConfig: () => request('/api/admin/bulk-orders/config'),
   updateConfig: (data) => request('/api/admin/bulk-orders/config', { method: 'PUT', body: data }),
+  listVarietyCategories: () => request('/api/admin/bulk-orders/variety-categories'),
+  createVarietyCategory: (formData) =>
+    request('/api/admin/bulk-orders/variety-categories', { method: 'POST', body: formData }),
+  updateVarietyCategory: (id, formData) =>
+    request(`/api/admin/bulk-orders/variety-categories/${id}`, { method: 'PUT', body: formData }),
+  deleteVarietyCategory: (id) =>
+    request(`/api/admin/bulk-orders/variety-categories/${id}`, { method: 'DELETE' }),
   listVarietyMeals: () => request('/api/admin/bulk-orders/variety-meals'),
   createVarietyMeal: (formData) =>
     request('/api/admin/bulk-orders/variety-meals', { method: 'POST', body: formData }),

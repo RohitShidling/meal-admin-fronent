@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { adminAuthAPI, TokenService } from '../services/api';
+import { adminAuthAPI, TokenService, SESSION_EXPIRED_EVENT } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -12,12 +12,42 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = !!TokenService.getAccessToken() && !!user;
 
+  const clearSession = useCallback(() => {
+    TokenService.clear();
+    setUser(null);
+    setStep('login');
+    setPendingPhone('');
+    setChallengeToken('');
+  }, []);
+
+  const resetLoginStep = useCallback(() => {
+    setStep('login');
+    setPendingPhone('');
+    setChallengeToken('');
+  }, []);
+
+  useEffect(() => {
+    const onExpired = () => clearSession();
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [clearSession]);
+
+  useEffect(() => {
+    if (!TokenService.getAccessToken() && user) {
+      setUser(null);
+    }
+  }, [user]);
+
   const sendOTP = useCallback(async (phone, password, username) => {
     setLoading(true);
     try {
       const data = await adminAuthAPI.login(phone, password, username);
+      const token = data?.challengeToken ?? data?.data?.challengeToken;
+      if (!token) {
+        return { success: false, message: 'Login challenge missing. Please try again.' };
+      }
       setPendingPhone(phone);
-      setChallengeToken(data.challengeToken);
+      setChallengeToken(token);
       setStep('otp');
       return { success: true, message: data.message };
     } catch (err) {
@@ -36,12 +66,16 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const res = await adminAuthAPI.verifyOTP(pendingPhone, otp, challengeToken);
-      // Backend response: { success, data: { accessToken, refreshToken, user } }
-      const { accessToken, refreshToken, user } = res.data || res;
+      const payload = res?.data ?? res;
+      const accessToken = payload?.accessToken;
+      const refreshToken = payload?.refreshToken;
+      const user = payload?.user;
+      if (!accessToken || !user) {
+        return { success: false, message: 'Login response incomplete. Please try again.' };
+      }
       TokenService.setTokens(accessToken, refreshToken);
       TokenService.setUser(user);
       setUser(user);
-      setStep('login');
       setChallengeToken('');
       setPendingPhone('');
       return { success: true };
@@ -61,17 +95,13 @@ export function AuthProvider({ children }) {
     try { await adminAuthAPI.logout(); } catch (_logoutError) {
       // logout should clear local session even if API fails
     }
-    TokenService.clear();
-    setUser(null);
-    setStep('login');
-    setPendingPhone('');
-    setChallengeToken('');
-  }, []);
+    clearSession();
+  }, [clearSession]);
 
   return (
     <AuthContext.Provider value={{
       user, loading, isAuthenticated, step,
-      pendingPhone, sendOTP, verifyOTP, logout,
+      pendingPhone, sendOTP, verifyOTP, logout, clearSession, resetLoginStep,
     }}>
       {children}
     </AuthContext.Provider>

@@ -183,7 +183,7 @@ function MasterData() {
           <p className="page-subtitle">Manage lookup values, states, cities, and companies</p>
         </div>
         {activeTab !== 'Standards' && activeTab !== 'Meal Skip Policy' && (
-          <Button onClick={openCreate}>Add {activeTab === 'Entities' ? 'Entity' : activeTab.slice(0, -1)}</Button>
+          <Button onClick={openCreate}>Add {activeTab === 'Entities' ? 'Entity' : activeTab === 'Cities' ? 'City' : activeTab.slice(0, -1)}</Button>
         )}
       </div>
 
@@ -291,7 +291,7 @@ function MasterData() {
       )}
 
       {/* Modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={`${editTarget ? 'Edit' : 'Add'} ${activeTab === 'Entities' ? 'Entity' : activeTab.slice(0, -1)}`} size="sm">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={`${editTarget ? 'Edit' : 'Add'} ${activeTab === 'Entities' ? 'Entity' : activeTab === 'Cities' ? 'City' : activeTab.slice(0, -1)}`} size="sm">
         <form onSubmit={handleSave}>
           <Input label={activeTab === 'Meal Sizes' ? 'Internal Name (Code)' : 'Name'} required {...f('name')} />
           

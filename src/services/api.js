@@ -3,7 +3,85 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 /** When true, backend sets HttpOnly refresh cookie (ADMIN_REFRESH_HTTPONLY_COOKIE); enable CORS credentials + same env on Vite. */
 const USE_REFRESH_HTTPONLY_COOKIE = import.meta.env.VITE_ADMIN_REFRESH_HTTPONLY_COOKIE === 'true';
 
-const TOKEN_STORAGE = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage;
+/** localStorage keeps admin signed in across tab close; sessionStorage is migrated once. */
+const TOKEN_STORAGE = typeof localStorage !== 'undefined' ? localStorage : sessionStorage;
+
+const migrateLegacyAdminTokens = () => {
+  if (typeof sessionStorage === 'undefined') return;
+  const keys = ['admin_access_token', 'admin_refresh_token', 'admin_user'];
+  keys.forEach((key) => {
+    try {
+      if (!TOKEN_STORAGE.getItem(key)) {
+        const legacy = sessionStorage.getItem(key);
+        if (legacy) TOKEN_STORAGE.setItem(key, legacy);
+      }
+    } catch {
+      /* ignore */
+    }
+  });
+};
+migrateLegacyAdminTokens();
+
+const decodeJwtPayload = (token) => {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
+/** True when access token is missing or expires within bufferMs (default 5 min). */
+export function isAccessTokenExpiringSoon(bufferMs = 5 * 60 * 1000) {
+  const token = TokenService.getAccessToken();
+  if (!token) return true;
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return true;
+  return Date.now() >= payload.exp * 1000 - bufferMs;
+}
+
+export function isAccessTokenExpired() {
+  const token = TokenService.getAccessToken();
+  if (!token) return true;
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return true;
+  return Date.now() >= payload.exp * 1000;
+}
+
+let refreshInFlight = null;
+
+async function refreshAccessToken() {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshBody = USE_REFRESH_HTTPONLY_COOKIE
+      ? {}
+      : { refreshToken: TokenService.getRefreshToken() };
+    const refreshRes = await fetch(`${BASE_URL}/api/admin/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: fetchCredentials(),
+      body: JSON.stringify(refreshBody),
+    });
+    const refreshData = await refreshRes.json().catch(() => ({}));
+    if (!refreshRes.ok) {
+      const error = new Error(refreshData.message || `HTTP ${refreshRes.status}`);
+      error.status = refreshRes.status;
+      error.data = refreshData;
+      throw error;
+    }
+    TokenService.setTokens(refreshData.data?.accessToken, refreshData.data?.refreshToken);
+    return refreshData;
+  })();
+
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
 
 const apiOriginDiffers = () => {
   try {
@@ -16,7 +94,24 @@ const apiOriginDiffers = () => {
 const fetchCredentials = () =>
   USE_REFRESH_HTTPONLY_COOKIE || apiOriginDiffers() ? 'include' : 'same-origin';
 
-// Token management — sessionStorage for access (tab-scoped); refresh in HttpOnly cookie when enabled (B1)
+/** Dispatched when refresh fails; AuthContext clears local session. */
+export const SESSION_EXPIRED_EVENT = 'admin:session-expired';
+
+const notifySessionExpired = () => {
+  TokenService.clear();
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login';
+  }
+};
+
+/** Clear session and send user to login (used when access token is no longer valid). */
+export function redirectToLogin() {
+  if (!isAccessTokenExpired()) return;
+  notifySessionExpired();
+}
+
+// Token management — localStorage for persistence; refresh in HttpOnly cookie when enabled
 const TokenService = {
   getAccessToken: () => TOKEN_STORAGE.getItem('admin_access_token'),
   getRefreshToken: () => {
@@ -28,8 +123,9 @@ const TokenService = {
     if (USE_REFRESH_HTTPONLY_COOKIE) {
       try {
         TOKEN_STORAGE.removeItem('admin_refresh_token');
-        localStorage.removeItem('admin_refresh_token');
-        localStorage.removeItem('admin_access_token');
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('admin_refresh_token');
+        }
       } catch (_e) {
         /* ignore */
       }
@@ -282,27 +378,13 @@ async function request(endpoint, options = {}) {
     
     if (res.status === 401 && !options._retry && !isAuthEndpoint) {
       try {
-        const refreshBody = USE_REFRESH_HTTPONLY_COOKIE
-          ? {}
-          : { refreshToken: TokenService.getRefreshToken() };
-        const refreshRes = await fetch(`${BASE_URL}/api/admin/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: fetchCredentials(),
-          body: JSON.stringify(refreshBody),
-        });
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          TokenService.setTokens(refreshData.data?.accessToken, refreshData.data?.refreshToken);
-          return request(endpoint, { ...options, _retry: true });
-        }
+        await refreshAccessToken();
+        return request(endpoint, { ...options, _retry: true });
       } catch (_refreshError) {
-        // noop - caller handles auth fallback
+        if (isAccessTokenExpired()) {
+          notifySessionExpired();
+        }
       }
-      
-      // If refresh fails, clear and redirect
-      TokenService.clear();
-      window.location.href = '/login';
     }
     
     // For 401 on login/auth, or if refresh failed, we just throw the error
@@ -390,11 +472,7 @@ export const adminAuthAPI = {
   logout: () =>
     request('/api/admin/auth/logout', { method: 'POST' }),
 
-  refresh: () =>
-    request('/api/admin/auth/refresh', {
-      method: 'POST',
-      body: USE_REFRESH_HTTPONLY_COOKIE ? {} : { refreshToken: TokenService.getRefreshToken() },
-    }),
+  refresh: () => refreshAccessToken(),
 };
 
 // ─── Admin Dashboard APIs ─────────────────────────────────────────────────────
@@ -685,6 +763,29 @@ export const adminEntitiesAPI = {
   create: (data) => request('/api/admin/entities', { method: 'POST', body: data }),
   update: (id, data) => request(`/api/admin/entities/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/api/admin/entities/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Admin Bulk Orders APIs ───────────────────────────────────────────────────
+export const adminBulkOrdersAPI = {
+  getConfig: () => request('/api/admin/bulk-orders/config'),
+  updateConfig: (data) => request('/api/admin/bulk-orders/config', { method: 'PUT', body: data }),
+  listVarietyMeals: () => request('/api/admin/bulk-orders/variety-meals'),
+  createVarietyMeal: (formData) =>
+    request('/api/admin/bulk-orders/variety-meals', { method: 'POST', body: formData }),
+  updateVarietyMeal: (id, formData) =>
+    request(`/api/admin/bulk-orders/variety-meals/${id}`, { method: 'PUT', body: formData }),
+  deleteVarietyMeal: (id) =>
+    request(`/api/admin/bulk-orders/variety-meals/${id}`, { method: 'DELETE' }),
+  listOrders: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/api/admin/bulk-orders/orders${q ? `?${q}` : ''}`);
+  },
+  getOrder: (id) => request(`/api/admin/bulk-orders/orders/${id}`),
+};
+
+/** Registered app user (signup username) — for bulk order customer display */
+export const adminClientsAPI = {
+  getById: (clientId) => request(`/api/admin/clients/${encodeURIComponent(clientId)}`),
 };
 
 // ─── Common APIs ──────────────────────────────────────────────────────────────

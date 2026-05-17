@@ -1,36 +1,97 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Input, Button } from '../components/FormElements';
-import { 
-  HiOutlineBuildingOffice2, 
-  HiOutlineTicket, 
-  HiOutlineChartBar, 
+import { adminAuthAPI, TokenService, isAccessTokenExpired } from '../services/api';
+import { Input, Button, Spinner } from '../components/FormElements';
+import {
+  HiOutlineBuildingOffice2,
+  HiOutlineTicket,
+  HiOutlineChartBar,
   HiOutlineQueueList,
   HiOutlinePhone,
   HiArrowRight,
-  HiArrowLeft
+  HiArrowLeft,
 } from 'react-icons/hi2';
 import './Login.css';
 
-
 export default function LoginPage() {
-  const { isAuthenticated, step, loading, sendOTP, verifyOTP, pendingPhone } = useAuth();
+  const { isAuthenticated, step, loading, sendOTP, verifyOTP, pendingPhone, clearSession, resetLoginStep } =
+    useAuth();
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [sessionExpiredMsg, setSessionExpiredMsg] = useState(false);
+  const [booting, setBooting] = useState(true);
+  const [allowDashboard, setAllowDashboard] = useState(false);
 
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  useEffect(() => {
+    document.documentElement.classList.remove('admin-shell');
+    document.body.classList.remove('admin-shell');
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('expired') === '1') {
+      setSessionExpiredMsg(true);
+      window.history.replaceState({}, '', '/login');
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const token = TokenService.getAccessToken();
+      if (!token) {
+        clearSession();
+        if (!cancelled) setBooting(false);
+        return;
+      }
+      try {
+        if (isAccessTokenExpired()) {
+          await adminAuthAPI.refresh();
+        }
+        if (!cancelled) {
+          setAllowDashboard(true);
+          setBooting(false);
+        }
+      } catch {
+        if (isAccessTokenExpired()) {
+          clearSession();
+          if (!cancelled) {
+            setAllowDashboard(false);
+            setBooting(false);
+            setSessionExpiredMsg(true);
+          }
+        } else if (!cancelled) {
+          setAllowDashboard(true);
+          setBooting(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearSession]);
+
+  if (booting) {
+    return (
+      <div className="login-page" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isAuthenticated || allowDashboard) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    if (!phone || !password || !username) { 
-      setError('Please enter phone, password and username.'); 
-      return; 
+    if (!phone || !password || !username) {
+      setError('Please enter phone, password and username.');
+      return;
     }
     const res = await sendOTP(phone, password, username);
     if (!res.success) setError(res.message || 'Failed to send OTP');
@@ -39,15 +100,21 @@ export default function LoginPage() {
   const handleVerifyOTP = async (e) => {
     e.preventDefault();
     setError('');
-    if (!otp) { setError('Please enter the OTP.'); return; }
+    if (!otp) {
+      setError('Please enter the OTP.');
+      return;
+    }
     const res = await verifyOTP(otp);
-    if (!res.success) setError(res.message || 'Invalid OTP');
+    if (!res.success) {
+      setError(res.message || 'Invalid OTP');
+      return;
+    }
+    setOtp('');
+    setError('');
   };
 
   return (
     <div className="login-page">
-
-      {/* Left panel — branding */}
       <div className="login-panel-left">
         <div className="login-brand-block">
           <img src="/logo.png" alt="Buuttii" className="login-brand-logo" />
@@ -68,16 +135,11 @@ export default function LoginPage() {
         <p className="login-panel-footer">© 2026 Buuttii · Admin Portal</p>
       </div>
 
-      {/* Right panel — form */}
       <div className="login-panel-right">
         <div className="login-card">
-
-          {/* Header */}
           <div className="login-card-header">
             <div>
-              <h2 className="login-card-title">
-                {step === 'login' ? 'Admin Sign In' : 'Verify OTP'}
-              </h2>
+              <h2 className="login-card-title">{step === 'login' ? 'Admin Sign In' : 'Verify OTP'}</h2>
               <p className="login-card-sub">
                 {step === 'login'
                   ? 'Sign in to the Buuttii Admin Portal'
@@ -85,6 +147,12 @@ export default function LoginPage() {
               </p>
             </div>
           </div>
+
+          {sessionExpiredMsg && (
+            <p className="login-error" style={{ marginBottom: 12 }}>
+              Your session expired. Please sign in again.
+            </p>
+          )}
 
           {step === 'login' ? (
             <form onSubmit={handleLogin} className="login-form" id="admin-login-form">
@@ -119,13 +187,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
               />
               {error && <p className="login-error">{error}</p>}
-              <Button
-                type="submit"
-                fullWidth
-                size="lg"
-                loading={loading}
-                id="admin-login-submit"
-              >
+              <Button type="submit" fullWidth size="lg" loading={loading} id="admin-login-submit">
                 Continue <HiArrowRight style={{ marginLeft: '8px' }} />
               </Button>
             </form>
@@ -149,19 +211,17 @@ export default function LoginPage() {
                 autoComplete="one-time-code"
               />
               {error && <p className="login-error">{error}</p>}
-              <Button
-                type="submit"
-                fullWidth
-                size="lg"
-                loading={loading}
-                id="admin-otp-submit"
-              >
+              <Button type="submit" fullWidth size="lg" loading={loading} id="admin-otp-submit">
                 Verify &amp; Login
               </Button>
               <button
                 type="button"
                 className="back-link"
-                onClick={() => { setOtp(''); setError(''); }}
+                onClick={() => {
+                  setOtp('');
+                  setError('');
+                  resetLoginStep();
+                }}
                 id="back-to-login"
               >
                 <HiArrowLeft style={{ marginRight: '8px' }} /> Back to login

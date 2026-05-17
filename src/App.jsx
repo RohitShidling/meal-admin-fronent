@@ -14,6 +14,7 @@ import Homepage from './pages/Homepage';
 import TokenPage from './pages/Token';
 import IncreaseRemainingPage from './pages/IncreaseRemaining';
 import MealSizeUpgrades from './pages/MealSizeUpgrades';
+import BulkOrders from './pages/BulkOrders';
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/token" element={<TokenPage />} />
             <Route path="/increase-remaining" element={<IncreaseRemainingPage />} />
             <Route path="/homepage" element={<Homepage />} />
+            <Route path="/bulk-orders" element={<BulkOrders />} />
           </Route>
 
           {/* Fallback */}

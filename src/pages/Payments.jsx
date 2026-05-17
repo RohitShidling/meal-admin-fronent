@@ -27,6 +27,7 @@ const ENTITY_LABELS = {
   professional_worker: 'Professional Worker',
   'professional worker': 'Professional Worker',
   cart: 'Cart',
+  bulk: 'Bulk order',
 };
 
 function canonicalSector(value) {
@@ -84,20 +85,35 @@ export default function Payments() {
   };
 
   const normalizeRow = (row) => {
+    const isBulkOrder =
+      String(row.order_type ?? row.orderType ?? '').toLowerCase() === 'bulk' ||
+      canonicalSector(row.sector ?? row.entity_type ?? row.entityType) === 'bulk';
     const normalizedSector = canonicalSector(row.sector ?? row.entity_type ?? row.entityType);
     const createdAt = row.paymentDate ?? row.created_at ?? row.createdAt ?? row.date ?? null;
-    const customerName =
+    let customerName =
       row.customerName ??
       row.customer_name ??
       row.entity_name ??
       '—';
+    if (isBulkOrder) {
+      const username = String(row.client_username ?? '').trim();
+      const fromApi = String(customerName || '').trim();
+      const phone = String(row.client_phone ?? row._phone ?? row.phone_number ?? '').trim();
+      customerName =
+        username ||
+        (fromApi && fromApi.toLowerCase() !== 'unknown' ? fromApi : '') ||
+        phone ||
+        '—';
+    }
     const cleanedName = String(customerName || '').trim();
     const orderStatusRaw = String(row.order_status ?? row.status ?? '').toLowerCase();
     const paymentStatusRaw = String(row.payment_status ?? row.paymentStatus ?? '').toLowerCase();
     const canonicalStatus =
-      orderStatusRaw
-      || (paymentStatusRaw === 'success' ? 'completed' : paymentStatusRaw)
-      || 'unknown';
+      orderStatusRaw === 'confirmed'
+        ? 'completed'
+        : orderStatusRaw
+          || (paymentStatusRaw === 'success' ? 'completed' : paymentStatusRaw)
+          || 'unknown';
     const isCartOrder = Boolean(row.isCartOrder ?? row.is_cart_order ?? false);
 
     return {
@@ -108,7 +124,9 @@ export default function Payments() {
       _schoolName: row.schoolName ?? row.school_name ?? null,
       _corporateName: row.corporate_location_name ?? row.corporateLocationName ?? null,
       _phone: row.client_phone ?? row.phone ?? row.phone_number ?? row.customerPhone ?? '—',
-      _plan: row.subscription_name ?? row.plan_name ?? row.planName ?? '—',
+      _plan: isBulkOrder
+        ? 'Bulk order'
+        : (row.subscription_name ?? row.plan_name ?? row.planName ?? '—'),
       _sector: normalizedSector || '',
       _status: canonicalStatus,
       _paymentStatus: paymentStatusRaw || null,
@@ -437,7 +455,10 @@ export default function Payments() {
                     <td>
                       <div style={{ fontWeight: 600 }}>{p._plan || p.subscription_name || '—'}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {(p.planType || '').toUpperCase()} {p.mealVariant ? `• ${p.mealVariant}` : ''}
+                        {String(p.order_type ?? p.orderType ?? '').toLowerCase() === 'bulk' ||
+                        canonicalSector(p._sector ?? p.sector) === 'bulk'
+                          ? 'Bulk order'
+                          : `${(p.planType || '').toUpperCase()}${p.mealVariant ? ` • ${p.mealVariant}` : ''}`}
                       </div>
                     </td>
                     <td><Badge variant="ghost">{p.sector_label || getSectorLabel(p)}</Badge></td>

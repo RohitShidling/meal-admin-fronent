@@ -226,7 +226,7 @@ export default function Menu() {
               </div>
               {/* Info */}
               <div style={{ padding: 16 }}>
-                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   {formatDate(m.menu_date)}
                 </div>
                 {m.items && <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{m.items}</p>}
@@ -354,20 +354,22 @@ export default function Menu() {
               ))}
             </div>
           </div>
-          {editTarget && (
-            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input
-                id="menu-active"
-                type="checkbox"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                style={{ width: 16, height: 16, accentColor: 'var(--accent-primary)' }}
-              />
-              <label htmlFor="menu-active" style={{ fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer' }}>
-                Active (display to users)
-              </label>
-            </div>
-          )}
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {editTarget && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  id="menu-active"
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: 'var(--accent-primary)' }}
+                />
+                <label htmlFor="menu-active" style={{ fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  Active (display to users)
+                </label>
+              </div>
+            )}
+          </div>
           <div className="form-actions" style={{ marginTop: 24 }}>
             <Button variant="ghost" type="button" onClick={() => setUploadOpen(false)}>Cancel</Button>
             <Button type="submit" loading={saving} id="menu-save-btn">

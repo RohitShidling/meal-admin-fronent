@@ -1,7 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { adminAuthAPI, TokenService } from '../services/api';
+import {
+  adminAuthAPI,
+  TokenService,
+  redirectToLogin,
+  isAccessTokenExpiringSoon,
+} from '../services/api';
 import Sidebar from './Sidebar';
 import './Layout.css';
 
@@ -86,19 +91,23 @@ export default function Layout() {
     };
   }, [isAuthenticated]);
 
-  /** Proactive JWT refresh — avoids logout when ADMIN_JWT_EXPIRES_IN is short; still respects expiry. */
+  /** Refresh access token only when it is close to expiring (avoids refresh-token rotation races). */
   useEffect(() => {
     if (!isAuthenticated) return undefined;
-    const bump = () => {
+    const maybeRefresh = () => {
       if (document.visibilityState !== 'visible') return;
       if (!TokenService.getAccessToken()) return;
-      adminAuthAPI.refresh().catch(() => {});
+      if (!isAccessTokenExpiringSoon()) return;
+      adminAuthAPI.refresh().catch(() => {
+        redirectToLogin();
+      });
     };
-    document.addEventListener('visibilitychange', bump);
-    const intervalMs = Number(import.meta.env.VITE_ADMIN_TOKEN_REFRESH_INTERVAL_MS) || 10 * 60 * 1000;
-    const id = window.setInterval(bump, intervalMs);
+    document.addEventListener('visibilitychange', maybeRefresh);
+    const intervalMs = Number(import.meta.env.VITE_ADMIN_TOKEN_REFRESH_INTERVAL_MS) || 20 * 60 * 1000;
+    const id = window.setInterval(maybeRefresh, intervalMs);
+    maybeRefresh();
     return () => {
-      document.removeEventListener('visibilitychange', bump);
+      document.removeEventListener('visibilitychange', maybeRefresh);
       window.clearInterval(id);
     };
   }, [isAuthenticated]);

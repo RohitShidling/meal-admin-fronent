@@ -9,6 +9,7 @@ import {
   formatInr,
   formatBulkDate,
   formatBulkDateTime,
+  formatBulkDeliveryAddress,
   parseOrderItems,
 } from './shared';
 
@@ -294,7 +295,7 @@ export default function BulkOrderOrders() {
             </label>
             <input
               type="text"
-              placeholder="Phone, order ID, customer, meal, category, tier (standard / 50+)"
+              placeholder="Phone, order ID, customer, address, city, meal, category, tier"
               value={filters.search}
               onChange={(e) => handleFilterChange('search', e.target.value)}
               style={filterSelectStyle}
@@ -398,6 +399,10 @@ export default function BulkOrderOrders() {
                       {tier.short === 'Standard'
                         ? 'School menu for delivery day (fixed bulk rate)'
                         : 'Variety catalog (per-meal price)'}
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Delivery address</span>
+                      {formatBulkDeliveryAddress(o)}
                     </div>
                   </div>
 

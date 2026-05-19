@@ -12,6 +12,7 @@ function formatEntityTypeLabel(type) {
     child: 'Students',
     teacher: 'Teachers',
     professional: 'Corporate',
+    bulk: 'Bulk orders',
   };
   return map[key] || key.replace(/_/g, ' ');
 }
@@ -21,6 +22,7 @@ function entityRevenueBarColor(type) {
   if (key === 'child') return '#3b82f6';
   if (key === 'teacher') return '#10b981';
   if (key === 'professional') return '#f59e0b';
+  if (key === 'bulk') return '#8b5cf6';
   return 'var(--accent-primary)';
 }
 
@@ -143,7 +145,7 @@ export default function Dashboard() {
             Revenue by subscriber type
           </h2>
           {byEntity.length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>No subscription revenue data yet.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>No revenue data yet.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {byEntity.map((ent) => {
@@ -167,8 +169,17 @@ export default function Dashboard() {
                       />
                     </div>
                     <div className="dashboard-revenue-meta">
-                      <span>Subscriptions: {ent.total_subscribed ?? 0}</span>
-                      <span>Active: {ent.active_count ?? 0}</span>
+                      {String(ent.entity_type).toLowerCase() === 'bulk' ? (
+                        <>
+                          <span>Orders: {ent.total_subscribed ?? 0}</span>
+                          <span>Active / pending: {ent.active_count ?? 0}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Subscriptions: {ent.total_subscribed ?? 0}</span>
+                          <span>Active: {ent.active_count ?? 0}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 );

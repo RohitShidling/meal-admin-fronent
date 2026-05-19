@@ -47,6 +47,15 @@ export const formatBulkDateTime = (value) => {
   });
 };
 
+export const formatBulkDeliveryAddress = (order) => {
+  const line = String(order.address_line ?? order.addressLine ?? '').trim();
+  const city = String(order.city_name ?? order.cityName ?? '').trim();
+  const state = String(order.state_name ?? order.stateName ?? '').trim();
+  const pin = String(order.pincode ?? '').trim();
+  const parts = [line, city, state, pin].filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : '—';
+};
+
 export const parseOrderItems = (items) => {
   if (!items) return [];
   if (Array.isArray(items)) return items;

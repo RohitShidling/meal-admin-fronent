@@ -1,10 +1,11 @@
-﻿import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
 import '../../components/Layout.css';
 
 const TABS = [
   { to: '/bulk-orders/settings', label: 'Settings' },
   { to: '/bulk-orders/categories', label: 'Categories' },
   { to: '/bulk-orders/meals', label: 'Meals' },
+  { to: '/bulk-orders/deliveries', label: 'Deliveries' },
   { to: '/bulk-orders/orders', label: 'Orders' },
 ];
 

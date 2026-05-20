@@ -19,6 +19,7 @@ import BulkOrderSettings from './pages/bulk-orders/BulkOrderSettings';
 import BulkOrderCategories from './pages/bulk-orders/BulkOrderCategories';
 import BulkOrderMeals from './pages/bulk-orders/BulkOrderMeals';
 import BulkOrderOrders from './pages/bulk-orders/BulkOrderOrders';
+import BulkOrderDeliveries from './pages/bulk-orders/BulkOrderDeliveries';
 
 export default function App() {
   return (
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="settings" element={<BulkOrderSettings />} />
               <Route path="categories" element={<BulkOrderCategories />} />
               <Route path="meals" element={<BulkOrderMeals />} />
+              <Route path="deliveries" element={<BulkOrderDeliveries />} />
               <Route path="orders" element={<BulkOrderOrders />} />
             </Route>
           </Route>

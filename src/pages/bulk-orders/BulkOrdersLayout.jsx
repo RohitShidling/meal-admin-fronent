@@ -1,13 +1,12 @@
-﻿import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
-import { BulkCartProvider } from '../../context/BulkCartContext';
-import BulkCartBar from '../../components/bulk-orders/BulkCartBar';
+import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
 import '../../components/Layout.css';
 
 const TABS = [
   { to: '/bulk-orders/orders', label: 'Orders' },
   { to: '/bulk-orders/categories', label: 'Categories' },
   { to: '/bulk-orders/meals', label: 'Meals' },
-  { to: '/bulk-orders/settings', label: 'Settings' },
+  { to: '/bulk-orders/deliveries', label: 'Deliveries' },
+  { to: '/bulk-orders/orders', label: 'Orders' },
 ];
 
 export default function BulkOrdersLayout() {

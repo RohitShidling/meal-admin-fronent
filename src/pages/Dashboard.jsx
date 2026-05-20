@@ -24,11 +24,12 @@ function addDaysYmd(ymd, days) {
   return d.toISOString().slice(0, 10);
 }
 
-function bulkOrdersFilterHref({ dateField = 'delivery', startDate = '', endDate = '' }) {
+function bulkOrdersFilterHref({ dateField = 'delivery', startDate = '', endDate = '', status = 'confirmed' }) {
   const params = new URLSearchParams();
   if (dateField) params.set('date_field', dateField);
   if (startDate) params.set('start_date', startDate);
   if (endDate) params.set('end_date', endDate);
+  if (status) params.set('status', status);
   const q = params.toString();
   return `/bulk-orders/orders${q ? `?${q}` : ''}`;
 }
@@ -186,13 +187,7 @@ export default function Dashboard() {
                 </span>
               </div>
               <div className="dashboard-size-row">
-                <span>New today</span>
-                <span className="dashboard-size-pill">
-                  {kitchenReport?.bulk_orders?.new_today_count ?? 0}
-                </span>
-              </div>
-              <div className="dashboard-size-row">
-                <span>Pending (upcoming)</span>
+                <span>Upcoming</span>
                 <span className="dashboard-size-pill">
                   {kitchenReport?.bulk_orders?.pending_total ?? 0}
                 </span>

@@ -17,6 +17,22 @@ function formatEntityTypeLabel(type) {
   return map[key] || key.replace(/_/g, ' ');
 }
 
+function addDaysYmd(ymd, days) {
+  if (!ymd) return '';
+  const d = new Date(`${ymd}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function bulkOrdersFilterHref({ dateField = 'delivery', startDate = '', endDate = '' }) {
+  const params = new URLSearchParams();
+  if (dateField) params.set('date_field', dateField);
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+  const q = params.toString();
+  return `/bulk-orders/orders${q ? `?${q}` : ''}`;
+}
+
 function entityRevenueBarColor(type) {
   const key = String(type || '').toLowerCase();
   if (key === 'child') return '#3b82f6';
@@ -137,6 +153,64 @@ export default function Dashboard() {
                 </p>
               )}
             </div>
+          </div>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 16 }}>
+            <h3 className="dashboard-section-title">Bulk orders</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="dashboard-size-row">
+                <a
+                  href={bulkOrdersFilterHref({
+                    startDate: kitchenReport?.date,
+                    endDate: kitchenReport?.date,
+                  })}
+                  style={{ color: 'inherit', textDecoration: 'none', flex: 1 }}
+                >
+                  Delivering today
+                </a>
+                <span className="dashboard-size-pill">
+                  {kitchenReport?.bulk_orders?.delivery_today_count ?? 0}
+                </span>
+              </div>
+              <div className="dashboard-size-row">
+                <a
+                  href={bulkOrdersFilterHref({
+                    startDate: addDaysYmd(kitchenReport?.date, 1),
+                    endDate: addDaysYmd(kitchenReport?.date, 1),
+                  })}
+                  style={{ color: 'inherit', textDecoration: 'none', flex: 1 }}
+                >
+                  Delivering tomorrow
+                </a>
+                <span className="dashboard-size-pill">
+                  {kitchenReport?.bulk_orders?.delivery_tomorrow_count ?? 0}
+                </span>
+              </div>
+              <div className="dashboard-size-row">
+                <span>New today</span>
+                <span className="dashboard-size-pill">
+                  {kitchenReport?.bulk_orders?.new_today_count ?? 0}
+                </span>
+              </div>
+              <div className="dashboard-size-row">
+                <span>Pending (upcoming)</span>
+                <span className="dashboard-size-pill">
+                  {kitchenReport?.bulk_orders?.pending_total ?? 0}
+                </span>
+              </div>
+            </div>
+            <a
+              href="/bulk-orders/orders"
+              style={{
+                display: 'inline-block',
+                marginTop: 12,
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--accent-primary)',
+                textDecoration: 'none',
+              }}
+            >
+              View bulk orders →
+            </a>
           </div>
         </div>
 

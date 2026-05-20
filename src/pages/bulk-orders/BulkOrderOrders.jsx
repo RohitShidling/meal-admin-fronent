@@ -125,6 +125,21 @@ function OrderLineItems({ order }) {
   );
 }
 
+const getInitialFilters = () => {
+  const params = new URLSearchParams(window.location.search);
+  const initial = { ...defaultFilters };
+  if (params.has('tier_mode')) initial.tier_mode = params.get('tier_mode');
+  if (params.has('category_id')) initial.category_id = params.get('category_id');
+  if (params.has('date_field')) initial.date_field = params.get('date_field');
+  if (params.has('start_date')) initial.start_date = params.get('start_date');
+  if (params.has('end_date')) initial.end_date = params.get('end_date');
+  if (params.has('status')) initial.status = params.get('status');
+  if (params.has('search')) initial.search = params.get('search');
+  if (params.has('page')) initial.page = Number(params.get('page')) || 1;
+  if (params.has('limit')) initial.limit = Number(params.get('limit')) || PAGE_SIZE;
+  return initial;
+};
+
 export default function BulkOrderOrders() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
@@ -134,7 +149,7 @@ export default function BulkOrderOrders() {
     total: 0,
     limit: PAGE_SIZE,
   });
-  const [filters, setFilters] = useState(defaultFilters);
+  const [filters, setFilters] = useState(getInitialFilters);
 
   useEffect(() => {
     adminBulkOrdersAPI
